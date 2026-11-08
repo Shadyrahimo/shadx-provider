@@ -1,4 +1,5 @@
 import express, { Request, Response } from 'express';
+import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
@@ -8,6 +9,18 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+
+// Enable CORS for cross-origin requests between Vercel frontend and Render backend
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, api-token');
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(200);
+    return;
+  }
+  next();
+});
 
 app.use(express.json({ limit: '10mb' }));
 
@@ -244,6 +257,11 @@ app.post('/api/notifications/send-email', async (req: Request, res: Response) =>
 
 async function startServer() {
   const isProd = process.env.NODE_ENV === 'production';
+  const distIndex = path.resolve(__dirname, 'dist', 'index.html');
+
+  app.get('/api/health', (_req, res) => {
+    res.json({ status: 'ok', service: 'ShadX-Provider API', environment: process.env.NODE_ENV || 'development' });
+  });
 
   if (!isProd) {
     const vite = await createViteServer({
@@ -251,10 +269,18 @@ async function startServer() {
       appType: 'spa',
     });
     app.use(vite.middlewares);
-  } else {
+  } else if (fs.existsSync(distIndex)) {
     app.use(express.static(path.resolve(__dirname, 'dist')));
     app.get('*', (_req, res) => {
-      res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
+      res.sendFile(distIndex);
+    });
+  } else {
+    app.get('/', (_req, res) => {
+      res.json({
+        status: 'online',
+        service: 'ShadX-Provider Backend API (Render)',
+        endpoints: ['/api/health', '/api/proxy/products', '/api/proxy/profile', '/api/proxy/test-order', '/api/notifications/send-email'],
+      });
     });
   }
 

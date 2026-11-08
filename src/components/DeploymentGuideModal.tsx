@@ -41,7 +41,7 @@ export const DeploymentGuideModal: React.FC<DeploymentGuideModalProps> = ({
 }) => {
   if (!isOpen) return null;
 
-  const [activeStep, setActiveStep] = useState<'neon' | 'github' | 'render' | 'vercel' | 'arch'>('arch');
+  const [activeStep, setActiveStep] = useState<'neon' | 'github' | 'render' | 'vercel' | 'arch' | 'troubleshoot'>('troubleshoot');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   const handleCopy = (key: string, text: string) => {
@@ -83,6 +83,7 @@ export const DeploymentGuideModal: React.FC<DeploymentGuideModalProps> = ({
         {/* Navigation Step Tabs */}
         <div className="flex flex-wrap items-center gap-1.5 bg-slate-950 p-1.5 rounded-xl border border-slate-800 mb-6 text-xs">
           {[
+            { id: 'troubleshoot', label: 'حل خطأ ERESOLVE ونشر آمن', icon: Zap, badge: 'جديد' },
             { id: 'arch', label: '1. المخطط الهندسي للمشروع', icon: IconCloudNetwork },
             { id: 'neon', label: '2. قاعدة البيانات (Neon Console)', icon: IconDatabase },
             { id: 'github', label: '3. مستودع الكود (GitHub)', icon: IconBrandGithub },
@@ -103,10 +104,155 @@ export const DeploymentGuideModal: React.FC<DeploymentGuideModalProps> = ({
               >
                 <Icon className="w-4 h-4 shrink-0" />
                 <span>{tab.label}</span>
+                {tab.badge && (
+                  <span className="text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.2 rounded-full font-bold">
+                    {tab.badge}
+                  </span>
+                )}
               </button>
             );
           })}
         </div>
+
+        {/* Tab 0: Troubleshooting & ERESOLVE error fix */}
+        {activeStep === 'troubleshoot' && (
+          <div className="space-y-4 text-xs">
+            {/* Banner Warning / Root Cause */}
+            <div className="bg-amber-950/40 border border-amber-500/40 rounded-xl p-4 text-amber-200 space-y-2.5">
+              <div className="flex items-start gap-2.5">
+                <Zap className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                <div className="space-y-2">
+                  <h3 className="text-sm font-bold text-white">
+                    تشخيص وحلول أخطاء النشر الثلاثة (Vercel & Render):
+                  </h3>
+                  <ul className="space-y-1.5 text-slate-300 leading-relaxed list-disc list-inside">
+                    <li>
+                      <strong className="text-amber-300">خطأ ERESOLVE (تعارض الحزم):</strong> تم حله عبر إزالة <code className="text-amber-300 font-mono">esbuild@^0.25.0</code> القديم وإضافة ملف <code className="text-white font-mono">.npmrc</code> بخاصية <code className="text-emerald-300 font-mono">legacy-peer-deps=true</code>.
+                    </li>
+                    <li>
+                      <strong className="text-indigo-300">خطأ Vercel (<code className="font-mono">failed to resolve import &quot;react-is&quot;</code>):</strong> مكتبة الرسوم البيانية <code className="font-mono">recharts</code> تتطلب حزمة <code className="text-emerald-300 font-mono">react-is</code> بشكل صريح مع React 19 و Vite 8 (Rolldown). تمت إضافتها مباشرة إلى <code className="font-mono">dependencies</code>.
+                    </li>
+                    <li>
+                      <strong className="text-purple-300">خطأ Render (<code className="font-mono">sh: 1: tsx: not found</code>):</strong> عند تفعيل <code className="font-mono">NODE_ENV=production</code> على Render، يتجاهل أمر <code className="font-mono">npm install</code> حزم <code className="font-mono">devDependencies</code>. تم نقل حزمة <code className="text-emerald-300 font-mono">tsx</code> إلى <code className="font-mono">dependencies</code> الأساسية ليتم تثبيتها وتشغيل <code className="font-mono">server.ts</code> بنجاح.
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick 1-Click Fix for Git */}
+            <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <h4 className="font-bold text-white flex items-center gap-2">
+                  <IconTerminal2 className="w-4 h-4 text-emerald-400" />
+                  1. رفع التحديث النهائي لحل أخطاء Vercel و Render فوراً:
+                </h4>
+                <span className="text-[10px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full font-semibold">
+                  موصى به
+                </span>
+              </div>
+              <p className="text-slate-400 text-[11px]">
+                تم تحديث <code className="text-indigo-300 font-mono">package.json</code> (بإضافة <code className="text-emerald-300 font-mono">react-is</code> ونقل <code className="text-emerald-300 font-mono">tsx</code> إلى الحزم الأساسية) وتحديث <code className="text-indigo-300 font-mono">server.ts</code> لدعم الـ CORS. ارفع التعديلات الآن:
+              </p>
+
+              <div className="relative">
+                <pre dir="ltr" className="bg-slate-900 border border-slate-800 rounded-xl p-3 text-xs font-mono text-emerald-300 overflow-x-auto whitespace-pre">
+{`git add package.json server.ts .npmrc vercel.json .env.example
+git commit -m "fix: add react-is for Vercel build and move tsx to dependencies for Render"
+git push origin main`}
+                </pre>
+                <button
+                  onClick={() =>
+                    handleCopy(
+                      'quick_git_push',
+                      'git add package.json server.ts .npmrc vercel.json .env.example\ngit commit -m "fix: add react-is for Vercel build and move tsx to dependencies for Render"\ngit push origin main'
+                    )
+                  }
+                  className="absolute top-2.5 left-2.5 p-1.5 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
+                  title="نسخ الأوامر"
+                >
+                  {copiedKey === 'quick_git_push' ? <IconCheck className="w-4 h-4 text-emerald-400" /> : <IconCopy className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            {/* Local Clean & Reset Commands */}
+            <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2.5">
+              <h4 className="font-bold text-white flex items-center gap-2">
+                <Terminal className="w-4 h-4 text-sky-400" />
+                2. تنظيف المستودع المحلي بالكامل وإعادة التثبيت (Clean Repository & Cache):
+              </h4>
+              <p className="text-slate-400 text-[11px]">
+                إذا واجهت أي مشاكل في جهازك المحلي، شغّل الأمر التالي لحذف ملفات القفل و <code className="text-slate-300 font-mono">node_modules</code> وتثبيت الحزم بدون تعارض:
+              </p>
+
+              {/* Linux / Mac / Bash */}
+              <div>
+                <span className="text-[10px] font-semibold text-slate-400 block mb-1">لنظام Linux / macOS / Git Bash:</span>
+                <div className="relative">
+                  <pre dir="ltr" className="bg-slate-900 border border-slate-800 rounded-xl p-3 text-xs font-mono text-sky-300 overflow-x-auto whitespace-pre">
+{`# 1. إزالة الحزم وملفات القفل القديمة
+rm -rf node_modules package-lock.json bun.lock bun.lockb
+
+# 2. تنظيف كاش npm
+npm cache clean --force
+
+# 3. إعادة التثبيت مع تجاهل تعارض التبعيات القديمة
+npm install --legacy-peer-deps
+
+# 4. تجربة بناء المشروع محلياً للتأكد
+npm run build`}
+                  </pre>
+                  <button
+                    onClick={() =>
+                      handleCopy(
+                        'clean_bash',
+                        'rm -rf node_modules package-lock.json bun.lock bun.lockb\nnpm cache clean --force\nnpm install --legacy-peer-deps\nnpm run build'
+                      )
+                    }
+                    className="absolute top-2.5 left-2.5 p-1.5 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
+                    title="نسخ أوامر Bash"
+                  >
+                    {copiedKey === 'clean_bash' ? <IconCheck className="w-4 h-4 text-emerald-400" /> : <IconCopy className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Windows PowerShell */}
+              <div className="pt-2">
+                <span className="text-[10px] font-semibold text-slate-400 block mb-1">لنظام Windows (PowerShell):</span>
+                <div className="relative">
+                  <pre dir="ltr" className="bg-slate-900 border border-slate-800 rounded-xl p-3 text-xs font-mono text-cyan-300 overflow-x-auto whitespace-pre">
+{`Remove-Item -Recurse -Force node_modules, package-lock.json, bun.lock, bun.lockb -ErrorAction Ignore
+npm cache clean --force
+npm install --legacy-peer-deps
+npm run build`}
+                  </pre>
+                  <button
+                    onClick={() =>
+                      handleCopy(
+                        'clean_ps',
+                        'Remove-Item -Recurse -Force node_modules, package-lock.json, bun.lock, bun.lockb -ErrorAction Ignore\nnpm cache clean --force\nnpm install --legacy-peer-deps\nnpm run build'
+                      )
+                    }
+                    className="absolute top-2.5 left-2.5 p-1.5 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
+                    title="نسخ أوامر PowerShell"
+                  >
+                    {copiedKey === 'clean_ps' ? <IconCheck className="w-4 h-4 text-emerald-400" /> : <IconCopy className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Why .npmrc solves this permanently */}
+            <div className="bg-indigo-950/30 p-3 rounded-lg border border-indigo-500/20 text-slate-300 text-[11px] space-y-1">
+              <span className="font-bold text-indigo-300 block">💡 كيف يمنع ملف <code className="text-white font-mono">.npmrc</code> المشكلة مستقبلاً؟</span>
+              <p>
+                يحتوي ملف <code className="text-indigo-300 font-mono">.npmrc</code> في جذر المشروع على سطر <code className="text-emerald-300 font-mono">legacy-peer-deps=true</code>. عند تشغيل Vercel أو Render للبناء التلقائي، يقرأ خادم النشر هذا الملف تلقائياً ويسمح بتثبيت الحزم دون توقف عند وجود تفاوت في إصدارات الـ peer dependencies الثانوية.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Tab 1: Architecture Overview */}
         {activeStep === 'arch' && (
