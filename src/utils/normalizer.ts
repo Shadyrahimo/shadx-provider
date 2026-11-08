@@ -1,6 +1,16 @@
 import { NormalizedParam, QtyValues, MarginConfig, CatalogProduct, RawProviderProduct } from '../types';
 
 /**
+ * Resolves backend API URL (uses VITE_API_URL on Vercel or relative path locally)
+ */
+export function buildBackendUrl(endpointPath: string): string {
+  const envBase = (import.meta as any).env?.VITE_API_URL || '';
+  const cleanBase = String(envBase).trim().replace(/\/+$/, '');
+  const cleanPath = endpointPath.startsWith('/') ? endpointPath : `/${endpointPath}`;
+  return cleanBase ? `${cleanBase}${cleanPath}` : cleanPath;
+}
+
+/**
  * Normalizes provider parameter strings into unified machine keys and Arabic labels
  */
 export function normalizeParam(rawInput: string): NormalizedParam {

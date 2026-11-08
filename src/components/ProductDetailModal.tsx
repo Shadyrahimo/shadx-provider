@@ -36,7 +36,7 @@ import {
   ReferenceLine,
 } from 'recharts';
 import { CatalogProduct, NormalizedParam } from '../types';
-import { generateIntegrationSnippet, evaluateIntegrationStatus, normalizeParam } from '../utils/normalizer';
+import { generateIntegrationSnippet, evaluateIntegrationStatus, normalizeParam, buildBackendUrl } from '../utils/normalizer';
 
 interface ProductDetailModalProps {
   product: CatalogProduct | null;
@@ -106,12 +106,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   const [testParams, setTestParams] = useState<Record<string, string>>(() => {
     const initial: Record<string, string> = {};
     product.normalizedParams.forEach((p) => {
-      if (p.category === 'player_id' || p.category === 'uid') initial[p.normalizedKey] = '9876543210';
-      else if (p.category === 'server_id') initial[p.normalizedKey] = '2001';
-      else if (p.category === 'email') initial[p.normalizedKey] = 'customer@store.com';
-      else if (p.category === 'username') initial[p.normalizedKey] = 'gamer_pro';
-      else if (p.category === 'phone') initial[p.normalizedKey] = '+966501234567';
-      else initial[p.normalizedKey] = 'test_value';
+      initial[p.normalizedKey] = '';
     });
     return initial;
   });
@@ -319,16 +314,16 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
     setTestResponse(null);
 
     try {
-      const res = await fetch('/api/proxy/test-order', {
+      const res = await fetch(buildBackendUrl('/api/proxy/test-order'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          baseUrl: providerBaseUrl || 'https://api.mersal-card.com',
-          apiToken: apiToken || 'demo_token',
+          baseUrl: providerBaseUrl,
+          apiToken: apiToken,
           productId: product.id,
           qty: testQty,
           params: testParams,
-          orderUuid: `test-${Math.random().toString(36).substring(2, 10)}`,
+          orderUuid: `order-${Date.now()}`,
         }),
       });
       const data = await res.json();

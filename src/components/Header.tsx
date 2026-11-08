@@ -132,12 +132,12 @@ export const Header: React.FC<HeaderProps> = ({
           ) : isLiveConnected ? (
             <div className="flex items-center gap-1.5 bg-emerald-950/40 border border-emerald-500/30 text-emerald-400 px-3 py-1.5 rounded-lg text-xs">
               <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>متصل بالمزود المباشر</span>
+              <span>متصل بالمزود المباشر ({totalProductsCount} منتج)</span>
             </div>
           ) : (
             <div className="flex items-center gap-1.5 bg-slate-800/80 border border-slate-700/60 text-slate-300 px-3 py-1.5 rounded-lg text-xs">
-              <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />
-              <span>كتالوج استعراض واختبار ({totalProductsCount} منتج)</span>
+              <span className="w-2 h-2 rounded-full bg-slate-500 inline-block" />
+              <span>بانتظار ربط المزود الحقيقي</span>
             </div>
           )}
 
@@ -165,7 +165,7 @@ export const Header: React.FC<HeaderProps> = ({
             <div className="flex items-center gap-1.5">
               <span className="text-slate-400 hidden sm:inline">آخر مزامنة:</span>
               <span className="font-bold font-mono-numbers text-slate-200">
-                {syncConfig.lastSyncTime ? syncConfig.lastSyncTime.split(' ')[0] : '14:00:00'}
+                {syncConfig.lastSyncTime ? syncConfig.lastSyncTime.split(' ')[0] : 'لم تتم بعد'}
               </span>
               {syncConfig.enabled ? (
                 <span className="bg-emerald-950/70 border border-emerald-500/40 text-emerald-400 text-[10px] px-1.5 py-0.2 rounded font-mono-numbers">

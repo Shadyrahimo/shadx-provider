@@ -17,6 +17,7 @@ import { CatalogProduct, NormalizedParam } from '../types';
 
 interface ProductTableProps {
   products: CatalogProduct[];
+  totalProductsCount?: number;
   selectedIds: Set<string | number>;
   onToggleSelect: (id: string | number) => void;
   onOpenProductDetail: (product: CatalogProduct, initialFixMode?: boolean) => void;
@@ -25,6 +26,7 @@ interface ProductTableProps {
 
 export const ProductTable: React.FC<ProductTableProps> = ({
   products,
+  totalProductsCount = 0,
   selectedIds,
   onToggleSelect,
   onOpenProductDetail,
@@ -60,6 +62,22 @@ export const ProductTable: React.FC<ProductTableProps> = ({
   };
 
   if (products.length === 0) {
+    if (totalProductsCount === 0) {
+      return (
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-12 text-center">
+          <div className="w-14 h-14 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center mx-auto mb-4 text-indigo-400">
+            <Layers className="w-7 h-7" />
+          </div>
+          <h3 className="text-base font-bold text-white mb-1.5">
+            النظام جاهز للربط المباشر مع المزود الحقيقي
+          </h3>
+          <p className="text-xs text-slate-400 max-w-lg mx-auto leading-relaxed">
+            تم تفريغ جميع البيانات الوهمية. للبدء، أدخل <strong className="text-slate-200">عنوان الـ API (Base URL)</strong> و<strong className="text-slate-200">رمز التوثيق الحقيقي (API Token)</strong> في الشريط العلوي، ثم اضغط على زر <strong className="text-indigo-400">«جلب وتحديث المنتجات»</strong> لتحميل كتالوجك الفعلي.
+          </p>
+        </div>
+      );
+    }
+
     return (
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-12 text-center">
         <div className="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center mx-auto mb-3 text-slate-500">

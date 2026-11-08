@@ -27,6 +27,7 @@ import {
   Plus,
 } from 'lucide-react';
 import { AppAlertItem, AlertRuleConfig, AlertType, CatalogProduct } from '../types';
+import { buildBackendUrl } from '../utils/normalizer';
 
 interface AlertsDrawerProps {
   isOpen: boolean;
@@ -109,19 +110,19 @@ export const AlertsDrawer: React.FC<AlertsDrawerProps> = ({
     setTestEmailStatus(null);
 
     try {
-      const res = await fetch('/api/notifications/send-email', {
+      const res = await fetch(buildBackendUrl('/api/notifications/send-email'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           recipientEmail: ruleConfig.recipientEmail,
-          subject: 'اختبار تكامل إشعارات البريد - متجر البطاقات والخدمات الرقمية',
-          productName: 'ببجي موبايل 60 شدة (PUBG 60 UC)',
-          productId: 101,
-          oldCost: '$1.05',
-          newCost: '$0.88',
-          changePercent: -16.2,
+          subject: 'اختبار إشعارات البريد الإلكتروني - ShadX-Provider',
+          productName: 'تحقق من جاهزية خدمة التنبيهات البريدية',
+          productId: 'TEST',
+          oldCost: '-',
+          newCost: '-',
+          changePercent: 0,
           profitTier: 'عالية الربحية (≥20%)',
-          marginPercent: 25,
+          marginPercent: 20,
           isTest: true,
         }),
       });
@@ -247,10 +248,10 @@ export const AlertsDrawer: React.FC<AlertsDrawerProps> = ({
                   type="button"
                   onClick={onSimulateProviderChanges}
                   className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-950/60 hover:bg-emerald-900/60 text-emerald-300 border border-emerald-500/40 text-xs font-medium transition-colors"
-                  title="توليد ومحاكاة تغيرات فورية في أسعار وتوفر المنتجات لاختبار السجل والتنبيهات"
+                  title="جلب وفحص أحدث أسعار وحالة توفر المنتجات مباشرة من المزود"
                 >
                   <Play className="w-3 h-3 text-emerald-400" />
-                  <span>محاكاة تغيرات المزود</span>
+                  <span>فحص تغيرات المزود الآن</span>
                 </button>
               </div>
 

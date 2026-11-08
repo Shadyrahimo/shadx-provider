@@ -22,10 +22,11 @@ import {
   SyncScheduleConfig,
   NormalizedParam,
 } from './types';
-import { PROVIDER_PRESETS, MOCK_PROVIDER_CATALOG } from './data/mockCatalog';
+import { PROVIDER_PRESETS } from './data/mockCatalog';
 import {
   transformRawProduct,
   exportProductsToCsv,
+  buildBackendUrl,
 } from './utils/normalizer';
 import {
   Package,
@@ -53,10 +54,19 @@ import {
 } from 'recharts';
 
 export default function App() {
-  // Provider settings
+  // Provider settings (persisted in localStorage for real credentials)
   const [selectedPreset, setSelectedPreset] = useState<ProviderPreset>(PROVIDER_PRESETS[0]);
-  const [baseUrl, setBaseUrl] = useState<string>(PROVIDER_PRESETS[0].baseUrl);
-  const [apiToken, setApiToken] = useState<string>(PROVIDER_PRESETS[0].defaultToken || '');
+  const [baseUrl, setBaseUrl] = useState<string>(() => localStorage.getItem('shadx_base_url') || '');
+  const [apiToken, setApiToken] = useState<string>(() => localStorage.getItem('shadx_api_token') || '');
+
+  // Persist real baseUrl and apiToken in localStorage
+  useEffect(() => {
+    localStorage.setItem('shadx_base_url', baseUrl);
+  }, [baseUrl]);
+
+  useEffect(() => {
+    localStorage.setItem('shadx_api_token', apiToken);
+  }, [apiToken]);
 
   // Live state & balance
   const [isLiveConnected, setIsLiveConnected] = useState<boolean>(false);
@@ -64,8 +74,8 @@ export default function App() {
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
-  // Raw catalog products
-  const [rawProducts, setRawProducts] = useState<RawProviderProduct[]>(MOCK_PROVIDER_CATALOG);
+  // Raw catalog products (starts completely empty — populated only from real provider API)
+  const [rawProducts, setRawProducts] = useState<RawProviderProduct[]>([]);
 
   // Profit Margin Config
   const [marginConfig, setMarginConfig] = useState<MarginConfig>({
@@ -74,16 +84,11 @@ export default function App() {
     rounding: 'exact',
   });
 
-  // Price Threshold Config (for Price Drop visual alerts)
+  // Price Threshold Config (clean — no pre-seeded fake product IDs)
   const [thresholdConfig, setThresholdConfig] = useState<PriceThresholdConfig>({
     enabled: true,
     defaultThreshold: '',
-    productThresholds: {
-      101: 1.00, // PUBG 60 UC ($0.88 cost vs $1.00 threshold -> triggers alert)
-      112: 1.10, // PUBG Mobile Korea ($0.90 cost vs $1.10 threshold -> triggers alert)
-      121: 1.20, // Free Fire 100 Diamonds ($0.92 cost vs $1.20 threshold -> triggers alert)
-      130: 1.15, // Mobile Legends 50 diamonds ($0.95 cost vs $1.15 threshold -> triggers alert)
-    },
+    productThresholds: {},
   });
 
   // Filter state
@@ -119,110 +124,35 @@ export default function App() {
   const [syncConfig, setSyncConfig] = useState<SyncScheduleConfig>({
     enabled: true,
     intervalMinutes: 15,
-    lastSyncTime: new Date().toLocaleTimeString('ar-SA', {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    }),
+    lastSyncTime: null,
     nextSyncTime: null,
-    syncCount: 1,
+    syncCount: 0,
     isSyncing: false,
     secondsRemaining: 15 * 60,
   });
 
-  // Status & Price Alert Rule Config
+  // Status & Price Alert Rule Config (clean — no fake product IDs)
   const [alertRuleConfig, setAlertRuleConfig] = useState<AlertRuleConfig>({
     trackAvailabilityChanges: true,
     trackPriceChanges: true,
     priceChangeThresholdPercent: 5,
-    customProductPercentages: {
-      101: 5,
-      121: 5,
-      201: 8,
-    },
-    enabledProductAlertIds: [101, 121, 201],
+    customProductPercentages: {},
+    enabledProductAlertIds: [],
     trackThresholdBreaches: true,
     notifyOnCostDrop: true,
     notifyOnCostHike: true,
     playSound: true,
-    emailNotificationsEnabled: true,
-    recipientEmail: 'shadyrahimo@gmail.com',
+    emailNotificationsEnabled: false,
+    recipientEmail: '',
     emailOnHighProfitOnly: true,
     emailPriceChangeThresholdPercent: 10,
   });
 
-  // Alert Log History (seeded with realistic events)
-  const [alerts, setAlerts] = useState<AppAlertItem[]>([
-    {
-      id: 'alert-init-1',
-      timestamp: 'منذ 3 دقائق',
-      dateObj: new Date(Date.now() - 180000).toISOString(),
-      productId: 101,
-      productName: 'ببجي موبايل 60 شدة (PUBG 60 UC)',
-      category: 'ألعاب وبطاقات شحن',
-      type: 'price_drop',
-      severity: 'success',
-      title: 'انخفاض في سعر التكلفة من المزود',
-      message: 'انخفض سعر التكلفة من $1.05 إلى $0.88 (-16.2%). فرصة ممتازة لزيادة هامش الربح الصافي!',
-      oldValue: '$1.05',
-      newValue: '$0.88',
-      changePercent: -16.2,
-      isRead: false,
-      emailSent: true,
-      emailRecipient: 'shadyrahimo@gmail.com',
-      isHighProfit: true,
-    },
-    {
-      id: 'alert-init-2',
-      timestamp: 'منذ 12 دقيقة',
-      dateObj: new Date(Date.now() - 720000).toISOString(),
-      productId: 121,
-      productName: 'فري فاير 100 جوهرة (Free Fire 100 Diamonds)',
-      category: 'ألعاب وبطاقات شحن',
-      type: 'threshold_breach',
-      severity: 'warning',
-      title: 'كسر حد التكلفة المستهدف (Threshold Breach)',
-      message: 'هبطت التكلفة ($0.92) دون الحد المحدد مسبقاً ($1.20) بفارق توفير $0.28 لكل عملية شحن.',
-      oldValue: 'الحد: $1.20',
-      newValue: 'الحالي: $0.92',
-      isRead: false,
-    },
-    {
-      id: 'alert-init-3',
-      timestamp: 'منذ 25 دقيقة',
-      dateObj: new Date(Date.now() - 1500000).toISOString(),
-      productId: 201,
-      productName: 'نتفلكس بريميوم اشتراك شهري 4K (Netflix 1 Month)',
-      category: 'اشتراكات وخدمات رقمية',
-      type: 'availability_oos',
-      severity: 'danger',
-      title: 'تغير حالة التوفر: نفاد الكمية من المزود',
-      message: 'أصبح المنتج غير متوفر للطلب المباشر من المزود. تم تعطيل الطلب مؤقتاً.',
-      oldValue: 'متاح للطلب',
-      newValue: 'غير متوفر',
-      isRead: true,
-    },
-    {
-      id: 'alert-init-4',
-      timestamp: 'منذ ساعة',
-      dateObj: new Date(Date.now() - 3600000).toISOString(),
-      productId: 151,
-      productName: 'شاهد VIP اشتراك 3 أشهر مع باقة الرياضة',
-      category: 'اشتراكات وخدمات رقمية',
-      type: 'availability_back',
-      severity: 'success',
-      title: 'تغير حالة التوفر: عودة المنتج للتوفر',
-      message: 'عاد المنتج ليكون متاحاً وجاهزاً للطلب الفوري وتنفيذ طلبات العملاء.',
-      oldValue: 'غير متوفر',
-      newValue: 'متاح للطلب',
-      isRead: true,
-    },
-  ]);
+  // Alert Log History (clean — only populated by real provider status/price changes)
+  const [alerts, setAlerts] = useState<AppAlertItem[]>([]);
 
   // Product snapshot ref to detect status and cost changes
-  const previousProductsRef = useRef<Map<string | number, RawProviderProduct>>(
-    new Map(MOCK_PROVIDER_CATALOG.map((p) => [p.id, { ...p }]))
-  );
+  const previousProductsRef = useRef<Map<string | number, RawProviderProduct>>(new Map());
 
   // Pagination
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -232,10 +162,7 @@ export default function App() {
   const [notification, setNotification] = useState<{
     text: string;
     type: 'success' | 'error' | 'info';
-  } | null>({
-    text: 'تم تحميل كتالوج المنتجات بنجاح (420+ منتج مع كشف المعلمات الذكي). يمكنك تعديل هامش الربح، الربط، أو إدخال عنوان الـ API المباشر للمزود.',
-    type: 'info',
-  });
+  } | null>(null);
 
   // Auto-dismiss notification after 8 seconds
   useEffect(() => {
@@ -248,8 +175,12 @@ export default function App() {
   // Handle Preset Switching
   const handleSelectPreset = (preset: ProviderPreset) => {
     setSelectedPreset(preset);
-    setBaseUrl(preset.baseUrl);
-    setApiToken(preset.defaultToken || '');
+    if (preset.baseUrl) {
+      setBaseUrl(preset.baseUrl);
+    }
+    if (preset.defaultToken) {
+      setApiToken(preset.defaultToken);
+    }
     setIsLiveConnected(false);
     setUserBalance(null);
     setUserEmail(null);
@@ -257,9 +188,9 @@ export default function App() {
 
   // Live Fetch Products & Profile via Server Proxy
   const handleFetchProducts = async () => {
-    if (!baseUrl.trim()) {
+    if (!baseUrl.trim() || !apiToken.trim()) {
       setNotification({
-        text: 'يرجى إدخال عنوان الـ API (Base URL) للمزود.',
+        text: 'يرجى إدخال عنوان الـ API (Base URL) ورمز التوثيق الحقيقي (API Token) للمزود أولاً.',
         type: 'error',
       });
       return;
@@ -270,7 +201,7 @@ export default function App() {
 
     try {
       // 1. Fetch Products
-      const prodRes = await fetch('/api/proxy/products', {
+      const prodRes = await fetch(buildBackendUrl('/api/proxy/products'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ baseUrl, apiToken }),
@@ -286,23 +217,33 @@ export default function App() {
         ? prodData.data
         : prodData.data?.products || [];
 
-      if (receivedList.length > 0) {
-        setRawProducts(receivedList);
-        detectAndGenerateAlerts(receivedList, 'المزود المباشر');
-        setIsLiveConnected(true);
-        setCurrentPage(1);
-        setSelectedIds(new Set());
-      }
+      const nowTimeStr = new Date().toLocaleTimeString('ar-SA', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      });
+
+      setRawProducts(receivedList);
+      detectAndGenerateAlerts(receivedList, 'المزود المباشر');
+      setIsLiveConnected(true);
+      setCurrentPage(1);
+      setSelectedIds(new Set());
+      setSyncConfig((prev) => ({
+        ...prev,
+        lastSyncTime: nowTimeStr,
+        syncCount: prev.syncCount + 1,
+        secondsRemaining: prev.intervalMinutes * 60,
+      }));
 
       // 2. Fetch Profile Balance
       try {
-        const profRes = await fetch('/api/proxy/profile', {
+        const profRes = await fetch(buildBackendUrl('/api/proxy/profile'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ baseUrl, apiToken }),
         });
         const profData = await profRes.json();
-        if (profData.success && profData.data?.balance) {
+        if (profData.success && profData.data?.balance !== undefined) {
           setUserBalance(String(profData.data.balance));
           if (profData.data.email) setUserEmail(String(profData.data.email));
         }
@@ -311,13 +252,13 @@ export default function App() {
       }
 
       setNotification({
-        text: `تم الاتصال بنجاح وتحديث ${receivedList.length} منتج مباشرة من مزود الـ API ورصد أي تغيرات في السجل.`,
+        text: `تم الاتصال بنجاح وجلب ${receivedList.length} منتج مباشرة من حسابك لدى المزود.`,
         type: 'success',
       });
     } catch (err: any) {
       console.warn('API fetch issue:', err);
       setNotification({
-        text: `تعذر الاتصال المباشر (${err.message}). يمكنك الاستمرار في استخدام وتجربة الكتالوج الشامل غير المتصل وحفظ وتصدير الإعدادات.`,
+        text: `تعذر الاتصال بالمزود (${err.message}). تأكد من صحة رابط الـ Base URL وصلاحية الـ API Token.`,
         type: 'error',
       });
     } finally {
@@ -435,7 +376,7 @@ export default function App() {
 
           if (shouldSendEmail) {
             // Asynchronously dispatch notification email via backend integration
-            fetch('/api/notifications/send-email', {
+            fetch(buildBackendUrl('/api/notifications/send-email'), {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -546,38 +487,9 @@ export default function App() {
     return newAlerts;
   };
 
-  // Simulation handler to test status & price alerts with 1 click
-  const handleSimulateProviderChanges = () => {
-    const updated = rawProducts.map((p) => {
-      const cloned = { ...p };
-      // 1. PUBG 60 UC -> Drop price by 15%
-      if (cloned.id === 101 || cloned.id === '101') {
-        const cur = typeof cloned.price === 'number' ? cloned.price : parseFloat(String(cloned.price)) || 1;
-        cloned.price = Number((cur * 0.85).toFixed(3));
-      }
-      // 2. Netflix 1 Month -> Toggle out of stock
-      else if (cloned.id === 201 || cloned.id === '201') {
-        cloned.available = cloned.available ? 0 : 1;
-      }
-      // 3. Free Fire 100 Diamonds -> Hike price by 12%
-      else if (cloned.id === 121 || cloned.id === '121') {
-        const cur = typeof cloned.price === 'number' ? cloned.price : parseFloat(String(cloned.price)) || 1;
-        cloned.price = Number((cur * 1.12).toFixed(3));
-      }
-      // 4. Shahid VIP 3 Months -> Bring back in stock
-      else if (cloned.id === 151 || cloned.id === '151') {
-        cloned.available = 1;
-      }
-      return cloned;
-    });
-
-    setRawProducts(updated);
-    const newItems = detectAndGenerateAlerts(updated, 'محاكاة المزود');
-
-    setNotification({
-      text: `⚡ تم تنفيذ محاكاة المزود بنجاح: تم رصد وتسجيل ${newItems.length} تنبيهات في سجل التنبيهات المرئي.`,
-      type: 'success',
-    });
+  // Trigger real provider check from Alerts Drawer
+  const handleCheckProviderChanges = () => {
+    handleFetchProducts();
   };
 
   const handleMarkAlertAsRead = (alertId: string) => {
@@ -598,8 +510,12 @@ export default function App() {
     return alerts.filter((a) => !a.isRead).length;
   }, [alerts]);
 
-  // Core background sync executor
+  // Core background sync executor (only runs when real credentials are provided)
   const triggerBackgroundSync = useCallback(async () => {
+    if (!baseUrl.trim() || !apiToken.trim()) {
+      return;
+    }
+
     setSyncConfig((prev) => ({ ...prev, isSyncing: true }));
     const nowTimeStr = new Date().toLocaleTimeString('ar-SA', {
       hour: '2-digit',
@@ -608,35 +524,21 @@ export default function App() {
     });
 
     try {
-      if (isLiveConnected && baseUrl.trim()) {
-        const prodRes = await fetch('/api/proxy/products', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ baseUrl, apiToken }),
-        });
-        const prodData = await prodRes.json();
-        if (prodData.success) {
-          const receivedList: RawProviderProduct[] = Array.isArray(prodData.data)
-            ? prodData.data
-            : prodData.data?.products || [];
-          if (receivedList.length > 0) {
-            setRawProducts(receivedList);
-            detectAndGenerateAlerts(receivedList, 'فحص دوري تلقائي');
-          }
+      const prodRes = await fetch(buildBackendUrl('/api/proxy/products'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ baseUrl, apiToken }),
+      });
+      const prodData = await prodRes.json();
+      if (prodData.success) {
+        const receivedList: RawProviderProduct[] = Array.isArray(prodData.data)
+          ? prodData.data
+          : prodData.data?.products || [];
+        if (receivedList.length > 0) {
+          setRawProducts(receivedList);
+          detectAndGenerateAlerts(receivedList, 'فحص دوري تلقائي');
+          setIsLiveConnected(true);
         }
-      } else {
-        // Intelligent subtle simulated background poll
-        const updated = rawProducts.map((p) => {
-          if ((p.id === 101 || p.id === '101') && Math.random() > 0.45) {
-            const cur = typeof p.price === 'number' ? p.price : parseFloat(String(p.price)) || 1;
-            const delta = (Math.random() - 0.48) * 0.08;
-            const newP = Math.max(0.70, Number((cur + delta).toFixed(3)));
-            return { ...p, price: newP };
-          }
-          return p;
-        });
-        setRawProducts(updated);
-        detectAndGenerateAlerts(updated, 'فحص دوري مجدول');
       }
 
       setSyncConfig((prev) => ({
@@ -650,16 +552,15 @@ export default function App() {
       console.warn('Periodic sync background issue:', e);
       setSyncConfig((prev) => ({
         ...prev,
-        lastSyncTime: nowTimeStr,
         isSyncing: false,
         secondsRemaining: prev.intervalMinutes * 60,
       }));
     }
-  }, [isLiveConnected, baseUrl, apiToken, rawProducts, alertRuleConfig, thresholdConfig]);
+  }, [baseUrl, apiToken, alertRuleConfig, thresholdConfig]);
 
   // Scheduled Periodic Sync Engine using setInterval
   useEffect(() => {
-    if (!syncConfig.enabled) return;
+    if (!syncConfig.enabled || !isLiveConnected) return;
 
     const intervalTimer = setInterval(() => {
       setSyncConfig((prev) => {
@@ -681,9 +582,16 @@ export default function App() {
     }, 1000);
 
     return () => clearInterval(intervalTimer);
-  }, [syncConfig.enabled, syncConfig.intervalMinutes, triggerBackgroundSync]);
+  }, [syncConfig.enabled, syncConfig.intervalMinutes, isLiveConnected, triggerBackgroundSync]);
 
   const handleTriggerManualSync = async () => {
+    if (!baseUrl.trim() || !apiToken.trim()) {
+      setNotification({
+        text: 'يرجى إدخال عنوان الـ API (Base URL) ورمز التوثيق (API Token) أولاً لإجراء المزامنة.',
+        type: 'error',
+      });
+      return;
+    }
     await triggerBackgroundSync();
     setNotification({
       text: '⚡ اكتمل الفحص والمزامنة الفورية للمزود بنجاح، وتم تحديث مؤشر آخر وقت فحص.',
@@ -1389,6 +1297,7 @@ export default function App() {
         {/* Catalog Table (The 11 Columns) */}
         <ProductTable
           products={paginatedProducts}
+          totalProductsCount={catalogProducts.length}
           selectedIds={selectedIds}
           onToggleSelect={handleToggleSelect}
           onOpenProductDetail={(prod, isFix) => {
@@ -1536,7 +1445,7 @@ export default function App() {
         onClearAlerts={handleClearAlerts}
         ruleConfig={alertRuleConfig}
         onUpdateRuleConfig={setAlertRuleConfig}
-        onSimulateProviderChanges={handleSimulateProviderChanges}
+        onSimulateProviderChanges={handleCheckProviderChanges}
         onSelectProduct={(prod) => setActiveModalProduct(prod)}
         productsMap={productsMap}
       />

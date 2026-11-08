@@ -337,26 +337,6 @@ export const ThresholdConfigModal: React.FC<ThresholdConfigModalProps> = ({
           </div>
         </div>
 
-        {/* Quick Simulation Action */}
-        <div className="bg-amber-950/20 border border-amber-500/30 rounded-xl p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs mb-5">
-          <div className="flex items-center gap-2">
-            <Zap className="w-4 h-4 text-amber-400 shrink-0" />
-            <div className="text-slate-300">
-              <span className="font-bold text-amber-300 block">تجربة سريعة: محاكاة انخفاض تكلفة من المزود</span>
-              <span className="text-[11px] text-slate-400">
-                يقوم بتخفيض تكلفة منتج تجريبياً بنسبة 55% لمشاهدة التنبيه البصري والأثر فوراً في الجدول
-              </span>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={handleQuickSimulate}
-            className="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-semibold whitespace-nowrap transition-colors"
-          >
-            محاكاة تخفيض السعر الآن
-          </button>
-        </div>
-
         {/* Footer Actions */}
         <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-slate-800">
           <button
