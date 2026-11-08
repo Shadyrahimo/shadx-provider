@@ -1,0 +1,6 @@
+{
+  "name": "مستكشف ومربط منتجات المزودين | Digital API Catalog Explorer",
+  "description": "منصة احترافية لجلب وتصفح وفلترة كتالوج خدمات ومزودي البطاقات والألعاب الرقمية، وحساب هوامش الربح واستخراج معلمات الربط التلقائي للمتاجر الرقمية",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
