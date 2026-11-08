@@ -193,9 +193,241 @@ export function parseQtyValues(
 }
 
 /**
+ * Diagnoses auto-integration readiness for a catalog product
+ */
+export function evaluateIntegrationStatus(product: {
+  name: string;
+  category: string;
+  normalizedParams: NormalizedParam[];
+  isAvailable: boolean;
+  rawParams?: string[];
+}): {
+  status: 'ready' | 'needs_fix' | 'unmapped';
+  statusLabel: string;
+  missingFields: string[];
+  suggestedParams: NormalizedParam[];
+  fixReason: string;
+} {
+  if (!product.isAvailable) {
+    return {
+      status: 'unmapped',
+      statusLabel: 'غير متوفر / غير مهيأ',
+      missingFields: [],
+      suggestedParams: [],
+      fixReason: 'المنتج غير متوفر حالياً لدى المزود، تم إيقاف الربط مؤقتاً.',
+    };
+  }
+
+  const nameLower = (product.name || '').toLowerCase();
+  const catLower = (product.category || '').toLowerCase();
+  const text = `${nameLower} ${catLower}`;
+
+  const missingFields: string[] = [];
+  const suggestedParams: NormalizedParam[] = [];
+
+  const hasParamCategory = (cat: NormalizedParam['category']) =>
+    product.normalizedParams.some((p) => p.category === cat);
+
+  const hasKey = (key: string) =>
+    product.normalizedParams.some((p) => p.normalizedKey === key);
+
+  // 1. Zone/Server ID Games (Mobile Legends, Genshin Impact, EA FC, Tower of Fantasy, etc.)
+  const isServerGame =
+    text.includes('mobile legends') ||
+    text.includes('mlbb') ||
+    text.includes('genshin') ||
+    text.includes('tower of fantasy') ||
+    text.includes('ea sports fc') ||
+    text.includes('fc mobile') ||
+    text.includes('سيرفر') ||
+    text.includes('خادم') ||
+    text.includes('zone');
+
+  // 2. Direct Player ID Games (PUBG, Free Fire, Roblox, COD, Valorant, Brawl Stars, Clash, Apex, etc.)
+  const isGame =
+    isServerGame ||
+    text.includes('pubg') ||
+    text.includes('ببجي') ||
+    text.includes('free fire') ||
+    text.includes('فري فاير') ||
+    text.includes('roblox') ||
+    text.includes('روبلوكس') ||
+    text.includes('call of duty') ||
+    text.includes('valorant') ||
+    text.includes('clash') ||
+    text.includes('brawl') ||
+    text.includes('yalla ludo') ||
+    text.includes('يلا لودو') ||
+    text.includes('diamonds') ||
+    text.includes('جواهر') ||
+    text.includes('ماسات') ||
+    text.includes('شدات') ||
+    text.includes('ألعاب') ||
+    text.includes('games');
+
+  // 3. Streaming and Digital Subscriptions (Netflix, Shahid, Spotify, YouTube, ChatGPT, Canva, Discord)
+  const isSubscription =
+    text.includes('netflix') ||
+    text.includes('نتفليكس') ||
+    text.includes('نتفلكس') ||
+    text.includes('shahid') ||
+    text.includes('شاهد') ||
+    text.includes('spotify') ||
+    text.includes('سبوتيفاي') ||
+    text.includes('youtube') ||
+    text.includes('يوتيوب') ||
+    text.includes('canva') ||
+    text.includes('كانفا') ||
+    text.includes('chatgpt') ||
+    text.includes('شات جي بي') ||
+    text.includes('discord') ||
+    text.includes('ديسكورد') ||
+    text.includes('اشتراك') ||
+    text.includes('subscription');
+
+  // 4. Telecom / Recharge / Live Apps (STC, Zain, Mobily, TopTop, Mico, Poppo, Chamet, HalaMe, Likee, TikTok, BIGO)
+  const isTelecomOrApp =
+    text.includes('toptop') ||
+    text.includes('mico') ||
+    text.includes('poppo') ||
+    text.includes('chamet') ||
+    text.includes('halame') ||
+    text.includes('tiktok') ||
+    text.includes('تيك توك') ||
+    text.includes('bigo') ||
+    text.includes('likee') ||
+    text.includes('لايكي') ||
+    text.includes('jawaker') ||
+    text.includes('جواكر') ||
+    text.includes('stc') ||
+    text.includes('zain') ||
+    text.includes('mobily') ||
+    text.includes('سوا') ||
+    text.includes('زين') ||
+    text.includes('موبايلي');
+
+  // Evaluate requirements:
+  if (isGame) {
+    if (!hasParamCategory('player_id') && !hasParamCategory('uid') && !hasParamCategory('username')) {
+      missingFields.push('معرّف اللاعب [player_id]');
+      suggestedParams.push({
+        raw: 'معرف اللاعب [player_id]',
+        normalizedKey: 'player_id',
+        labelAr: 'معرّف اللاعب (Player ID)',
+        category: 'player_id',
+      });
+    }
+
+    if (isServerGame && !hasParamCategory('server_id') && !hasKey('server_id')) {
+      missingFields.push('معرف الخادم [server_id]');
+      suggestedParams.push({
+        raw: 'Server ID [server_id]',
+        normalizedKey: 'server_id',
+        labelAr: 'معرف الخادم (Server ID)',
+        category: 'server_id',
+      });
+    }
+  } else if (isSubscription) {
+    if (!hasParamCategory('email') && !hasKey('email')) {
+      missingFields.push('البريد الإلكتروني [email]');
+      suggestedParams.push({
+        raw: 'EMAIL',
+        normalizedKey: 'email',
+        labelAr: 'البريد الإلكتروني (EMAIL)',
+        category: 'email',
+      });
+    }
+  } else if (isTelecomOrApp) {
+    if (!hasParamCategory('phone') && !hasParamCategory('username') && !hasParamCategory('player_id')) {
+      missingFields.push('رقم الهاتف أو المعرف [phone]');
+      suggestedParams.push({
+        raw: 'رقم الهاتف [phone]',
+        normalizedKey: 'phone',
+        labelAr: 'رقم الهاتف (Phone Number)',
+        category: 'phone',
+      });
+    }
+  }
+
+  // Check unmapped / custom parameters
+  const customParams = product.normalizedParams.filter((p) => p.category === 'custom');
+  if (customParams.length > 0) {
+    missingFields.push(`معلمة غير معيارية (${customParams.map((cp) => cp.raw).join(', ')})`);
+    customParams.forEach((cp) => {
+      const low = cp.raw.toLowerCase();
+      if (low.includes('id') || low.includes('ايدي') || low.includes('لاعب')) {
+        suggestedParams.push({
+          raw: cp.raw,
+          normalizedKey: 'player_id',
+          labelAr: 'معرّف اللاعب (Player ID)',
+          category: 'player_id',
+        });
+      } else if (low.includes('سيرفر') || low.includes('خادم')) {
+        suggestedParams.push({
+          raw: cp.raw,
+          normalizedKey: 'server_id',
+          labelAr: 'معرف الخادم (Server ID)',
+          category: 'server_id',
+        });
+      } else if (low.includes('بريد') || low.includes('ايميل')) {
+        suggestedParams.push({
+          raw: cp.raw,
+          normalizedKey: 'email',
+          labelAr: 'البريد الإلكتروني (EMAIL)',
+          category: 'email',
+        });
+      } else {
+        suggestedParams.push({
+          raw: cp.raw,
+          normalizedKey: 'username',
+          labelAr: 'اسم المستخدم (Username)',
+          category: 'username',
+        });
+      }
+    });
+  }
+
+  // Deduplicate suggested params by normalizedKey
+  const uniqueSuggested: NormalizedParam[] = [];
+  const seenKeys = new Set<string>(product.normalizedParams.map((p) => p.normalizedKey));
+  suggestedParams.forEach((sp) => {
+    if (!seenKeys.has(sp.normalizedKey)) {
+      uniqueSuggested.push(sp);
+      seenKeys.add(sp.normalizedKey);
+    }
+  });
+
+  if (missingFields.length > 0) {
+    return {
+      status: 'needs_fix',
+      statusLabel: 'معلمات ناقصة',
+      missingFields,
+      suggestedParams: uniqueSuggested,
+      fixReason: `ينقص معلمات الربط التلقائي: ${missingFields.join(' و ')}`,
+    };
+  }
+
+  return {
+    status: 'ready',
+    statusLabel: 'ربط مكتمل',
+    missingFields: [],
+    suggestedParams: [],
+    fixReason: 'جميع معلمات الربط مطابقة ومكتملة للتنفيذ التلقائي عبر الـ API.',
+  };
+}
+
+/**
  * Transforms a raw provider product object into our standardized CatalogProduct
  */
-export function transformRawProduct(raw: RawProviderProduct, margin: MarginConfig): CatalogProduct {
+export function transformRawProduct(
+  raw: RawProviderProduct,
+  margin: MarginConfig,
+  thresholdConfig?: {
+    enabled: boolean;
+    defaultThreshold: number | '';
+    productThresholds: Record<string | number, number>;
+  }
+): CatalogProduct {
   const cost = typeof raw.price === 'string' ? parseFloat(raw.price) || 0 : Number(raw.price || 0);
   const basePrice = raw.base_price !== undefined ? parseFloat(String(raw.base_price)) : undefined;
 
@@ -222,10 +454,41 @@ export function transformRawProduct(raw: RawProviderProduct, margin: MarginConfi
     isAvailable = false;
   }
 
+  // Threshold alert computation
+  let thresholdPrice: number | undefined = undefined;
+  let isBelowThreshold: boolean = false;
+  let thresholdSavings: number | undefined = undefined;
+
+  if (thresholdConfig && thresholdConfig.enabled) {
+    if (thresholdConfig.productThresholds[raw.id] !== undefined) {
+      thresholdPrice = thresholdConfig.productThresholds[raw.id];
+    } else if (thresholdConfig.defaultThreshold !== '' && thresholdConfig.defaultThreshold > 0) {
+      thresholdPrice = Number(thresholdConfig.defaultThreshold);
+    }
+
+    if (thresholdPrice !== undefined && thresholdPrice > 0) {
+      if (cost < thresholdPrice) {
+        isBelowThreshold = true;
+        thresholdSavings = Number((thresholdPrice - cost).toFixed(3));
+      }
+    }
+  }
+
+  const catName = raw.category_name || 'عام / غير مصنف';
+  const prodName = raw.name || `منتج #${raw.id}`;
+
+  const diagnostic = evaluateIntegrationStatus({
+    name: prodName,
+    category: catName,
+    normalizedParams,
+    isAvailable,
+    rawParams: rawParamsList,
+  });
+
   return {
     id: raw.id,
-    name: raw.name || `منتج #${raw.id}`,
-    category: raw.category_name || 'عام / غير مصنف',
+    name: prodName,
+    category: catName,
     costPriceUsd: cost,
     basePriceUsd: basePrice,
     suggestedSellPriceUsd: calculateSuggestedPrice(cost, margin),
@@ -237,6 +500,11 @@ export function transformRawProduct(raw: RawProviderProduct, margin: MarginConfi
     rawParams: rawParamsList,
     normalizedParams,
     categoryImg: raw.category_img,
+    thresholdPrice,
+    isBelowThreshold,
+    thresholdSavings,
+    integrationStatus: diagnostic.status,
+    integrationDiagnostic: diagnostic,
   };
 }
 
@@ -332,6 +600,8 @@ export function exportProductsToCsv(products: CatalogProduct[]): void {
     'سعر التكلفة (USD)',
     'سعر البيع المقترح (USD)',
     'هامش الربح (USD)',
+    'الحد السعري للتنبيه (Threshold)',
+    'تنبيه انخفاض التكلفة',
     'الحالة',
     'نوع الكمية',
     'الحدود (Min-Max)',
@@ -343,6 +613,8 @@ export function exportProductsToCsv(products: CatalogProduct[]): void {
     const profit = (p.suggestedSellPriceUsd - p.costPriceUsd).toFixed(3);
     const paramsLabels = p.normalizedParams.map((np) => np.labelAr).join(' | ') || 'لا توجد';
     const paramsKeys = p.normalizedParams.map((np) => np.normalizedKey).join(', ') || 'none';
+    const thresholdStr = p.thresholdPrice !== undefined ? `$${p.thresholdPrice}` : 'غير محدد';
+    const alertStr = p.isBelowThreshold ? `تنبيه: أقل من الحد بفارق $${p.thresholdSavings}` : 'طبيعي';
 
     return [
       `"${p.id}"`,
@@ -351,6 +623,8 @@ export function exportProductsToCsv(products: CatalogProduct[]): void {
       p.costPriceUsd,
       p.suggestedSellPriceUsd,
       profit,
+      `"${thresholdStr}"`,
+      `"${alertStr}"`,
       p.isAvailable ? 'متاح' : 'غير متاح',
       `"${p.qtyDescriptionAr}"`,
       `"${p.limitsDisplay}"`,

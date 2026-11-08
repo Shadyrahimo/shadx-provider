@@ -9,6 +9,9 @@ import {
   Layers,
   HelpCircle,
   TrendingUp,
+  Wrench,
+  AlertTriangle,
+  CheckCircle,
 } from 'lucide-react';
 import { CatalogProduct, NormalizedParam } from '../types';
 
@@ -16,7 +19,7 @@ interface ProductTableProps {
   products: CatalogProduct[];
   selectedIds: Set<string | number>;
   onToggleSelect: (id: string | number) => void;
-  onOpenProductDetail: (product: CatalogProduct) => void;
+  onOpenProductDetail: (product: CatalogProduct, initialFixMode?: boolean) => void;
   providerBaseUrl: string;
 }
 
@@ -97,7 +100,7 @@ export const ProductTable: React.FC<ProductTableProps> = ({
                 5. سعر البيع المقترح ($)
               </th>
               <th className="py-3 px-3 whitespace-nowrap text-center">
-                6. الحالة
+                6. الحالة والربط التلقائي
               </th>
               <th className="py-3 px-3 whitespace-nowrap text-center">
                 7. نوع الكمية
@@ -108,7 +111,7 @@ export const ProductTable: React.FC<ProductTableProps> = ({
               <th className="py-3 px-4 min-w-[200px]">
                 9. المعلمات المطلوبة (Params)
               </th>
-              <th className="py-3 px-3.5 w-24 text-center whitespace-nowrap">
+              <th className="py-3 px-3.5 w-36 text-center whitespace-nowrap">
                 10. الإجراءات
               </th>
             </tr>
@@ -126,7 +129,9 @@ export const ProductTable: React.FC<ProductTableProps> = ({
                   key={product.id}
                   onClick={() => onToggleSelect(product.id)}
                   className={`transition-colors cursor-pointer ${
-                    isSelected
+                    product.isBelowThreshold
+                      ? 'bg-amber-950/20 hover:bg-amber-950/30 border-r-2 border-r-amber-400'
+                      : isSelected
                       ? 'bg-indigo-950/30 hover:bg-indigo-950/40'
                       : 'hover:bg-slate-800/50'
                   }`}
@@ -166,8 +171,15 @@ export const ProductTable: React.FC<ProductTableProps> = ({
 
                   {/* 2. اسم المنتج */}
                   <td className="py-3 px-4">
-                    <div className="font-semibold text-slate-100 hover:text-indigo-300 transition-colors">
-                      {product.name}
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-slate-100 hover:text-indigo-300 transition-colors">
+                        {product.name}
+                      </span>
+                      {product.isBelowThreshold && (
+                        <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500 text-slate-950 animate-pulse">
+                          فرصة سعر!
+                        </span>
+                      )}
                     </div>
                     {product.basePriceUsd && product.basePriceUsd !== product.costPriceUsd && (
                       <div className="text-[11px] text-slate-500 font-mono-numbers">
@@ -183,9 +195,37 @@ export const ProductTable: React.FC<ProductTableProps> = ({
                     </span>
                   </td>
 
-                  {/* 4. سعر التكلفة (USD) */}
-                  <td className="py-3 px-3.5 whitespace-nowrap text-left font-mono-numbers font-medium text-slate-300">
-                    ${product.costPriceUsd.toFixed(3)}
+                  {/* 4. سعر التكلفة (USD) with Visual Alert */}
+                  <td className="py-3 px-3.5 whitespace-nowrap text-left font-mono-numbers">
+                    <div className="flex items-center gap-1.5 justify-start">
+                      <span
+                        className={`font-semibold ${
+                          product.isBelowThreshold
+                            ? 'text-amber-300 font-bold text-sm bg-amber-950/60 border border-amber-500/40 px-1.5 py-0.5 rounded'
+                            : 'text-slate-300'
+                        }`}
+                      >
+                        ${product.costPriceUsd.toFixed(3)}
+                      </span>
+                      {product.isBelowThreshold && (
+                        <span
+                          className="inline-flex items-center gap-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 rounded text-[10px] font-bold"
+                          title={`تنبيه: انخفضت التكلفة عن الحد المستهدف $${product.thresholdPrice} بفارق توفير $${product.thresholdSavings}`}
+                        >
+                          <span>⚡ &lt; ${product.thresholdPrice}</span>
+                        </span>
+                      )}
+                    </div>
+                    {product.isBelowThreshold && product.thresholdSavings !== undefined && (
+                      <div className="text-[10px] text-amber-400 font-semibold mt-0.5 flex items-center gap-1">
+                        <span>وفّر: ${product.thresholdSavings}</span>
+                      </div>
+                    )}
+                    {!product.isBelowThreshold && product.thresholdPrice !== undefined && (
+                      <div className="text-[10px] text-slate-500 mt-0.5 font-mono">
+                        حد التنبيه: ${product.thresholdPrice}
+                      </div>
+                    )}
                   </td>
 
                   {/* 5. سعر البيع المقترح ($) */}
@@ -199,19 +239,52 @@ export const ProductTable: React.FC<ProductTableProps> = ({
                     </div>
                   </td>
 
-                  {/* 6. الحالة */}
+                  {/* 6. الحالة والربط التلقائي */}
                   <td className="py-3 px-3 whitespace-nowrap text-center">
-                    {product.isAvailable ? (
-                      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-400 bg-emerald-950/40 border border-emerald-500/20 px-2 py-0.5 rounded">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                        متاح
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-rose-400 bg-rose-950/40 border border-rose-500/20 px-2 py-0.5 rounded">
-                        <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
-                        غير متوفر
-                      </span>
-                    )}
+                    <div className="flex flex-col items-center gap-1">
+                      {/* Availability Badge */}
+                      {product.isAvailable ? (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-400 bg-emerald-950/40 border border-emerald-500/20 px-2 py-0.5 rounded">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                          متاح
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-medium text-rose-400 bg-rose-950/40 border border-rose-500/20 px-2 py-0.5 rounded">
+                          <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
+                          غير متوفر
+                        </span>
+                      )}
+
+                      {/* Auto-Integration Visual Indicator (إشارة حالة الربط التلقائي) */}
+                      {product.integrationStatus === 'ready' && (
+                        <span
+                          className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-300 bg-emerald-950/80 border border-emerald-500/40 px-2 py-0.5 rounded-full"
+                          title="ربط تلقائي مكتمل: جميع المعلمات مطابقة لمعايير المزود"
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                          <span>✓ ربط مكتمل</span>
+                        </span>
+                      )}
+
+                      {product.integrationStatus === 'needs_fix' && (
+                        <span
+                          className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-300 bg-amber-950/80 border border-amber-500/50 px-2 py-0.5 rounded-full shadow-xs shadow-amber-500/10"
+                          title={product.integrationDiagnostic?.fixReason || 'معلمات ناقصة تحتاج إلى إصلاح'}
+                        >
+                          <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0" />
+                          <span>⚠️ معلمات ناقصة</span>
+                        </span>
+                      )}
+
+                      {product.integrationStatus === 'unmapped' && (
+                        <span
+                          className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-400 bg-slate-950 border border-slate-800 px-2 py-0.5 rounded-full"
+                          title="غير متوفر أو غير مهيأ حالياً"
+                        >
+                          <span>✕ غير مهيأ</span>
+                        </span>
+                      )}
+                    </div>
                   </td>
 
                   {/* 7. نوع الكمية */}
@@ -248,19 +321,30 @@ export const ProductTable: React.FC<ProductTableProps> = ({
                     )}
                   </td>
 
-                  {/* 10. الإجراءات */}
+                  {/* 10. الإجراءات مع زر إصلاح الربط */}
                   <td
                     className="py-3 px-3.5 whitespace-nowrap text-center"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <div className="flex items-center justify-center gap-1">
+                    <div className="flex items-center justify-center gap-1.5">
+                      {product.integrationStatus === 'needs_fix' && (
+                        <button
+                          onClick={() => onOpenProductDetail(product, true)}
+                          className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500 border border-amber-500/60 hover:border-amber-400 text-amber-300 hover:text-slate-950 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1 shadow-sm shadow-amber-500/10 active:scale-95"
+                          title="إصلاح الربط: فتح تفاصيل المنتج والمقترحات الذكية لإكمال البيانات المفقودة"
+                        >
+                          <Wrench className="w-3.5 h-3.5 shrink-0" />
+                          <span>إصلاح الربط</span>
+                        </button>
+                      )}
+
                       <button
-                        onClick={() => onOpenProductDetail(product)}
-                        className="px-2 py-1 bg-indigo-600/20 hover:bg-indigo-600 border border-indigo-500/40 hover:border-indigo-500 text-indigo-300 hover:text-white rounded text-[11px] font-medium transition-colors flex items-center gap-1"
-                        title="فحص تفاصيل الربط وتجربة استعلام الطلب"
+                        onClick={() => onOpenProductDetail(product, false)}
+                        className="px-2 py-1 bg-indigo-600/20 hover:bg-indigo-600 border border-indigo-500/40 hover:border-indigo-500 text-indigo-300 hover:text-white rounded-lg text-[11px] font-medium transition-colors flex items-center gap-1"
+                        title="فحص تفاصيل الربط وتجربة استعلام الطلب والأكواد"
                       >
                         <Code2 className="w-3.5 h-3.5" />
-                        <span>ربط</span>
+                        <span>{product.integrationStatus === 'needs_fix' ? 'تفاصيل' : 'ربط'}</span>
                       </button>
                     </div>
                   </td>

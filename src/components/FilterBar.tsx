@@ -12,6 +12,7 @@ import {
   Tag,
   DollarSign,
   Package,
+  Wrench,
 } from 'lucide-react';
 import { FilterState } from '../types';
 
@@ -29,6 +30,7 @@ interface FilterBarProps {
   isCopiedIds: boolean;
   onSelectAll: () => void;
   isAllSelected: boolean;
+  alertProductsCount: number;
 }
 
 export const FilterBar: React.FC<FilterBarProps> = ({
@@ -45,6 +47,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
   isCopiedIds,
   onSelectAll,
   isAllSelected,
+  alertProductsCount,
 }) => {
   const hasActiveFilters =
     filters.searchQuery !== '' ||
@@ -52,9 +55,11 @@ export const FilterBar: React.FC<FilterBarProps> = ({
     filters.availability !== 'all' ||
     filters.productType !== 'all' ||
     filters.paramFilter !== 'all' ||
+    (filters.integrationFilter && filters.integrationFilter !== 'all') ||
     filters.minCost !== '' ||
     filters.maxCost !== '' ||
-    filters.sortBy !== 'id_asc';
+    filters.sortBy !== 'id_asc' ||
+    filters.onlyThresholdAlerts;
 
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 mb-4 shadow-sm space-y-3.5">
@@ -82,7 +87,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
           )}
         </div>
 
-        {/* Category Dropdown (3 cols) */}
+        {/* Category Dropdown (4 cols) */}
         <div className="relative md:col-span-4">
           <select
             value={filters.selectedCategory}
@@ -111,12 +116,39 @@ export const FilterBar: React.FC<FilterBarProps> = ({
             <option value="cost_desc">سعر التكلفة: من الأعلى للأقل</option>
             <option value="name_asc">الاسم: أبجدياً (أ - ي)</option>
             <option value="margin_desc">الأعلى هامش ربح مقترح</option>
+            <option value="savings_desc">⚡ الأعلى انخفاضاً عن الحد (أكبر وفر)</option>
           </select>
         </div>
       </div>
 
-      {/* Second Row: Specific Filters (Availability, Qty Type, Required Param, Price Range) */}
+      {/* Second Row: Specific Filters (Availability, Qty Type, Required Param, Price Range, Threshold Alert Toggle) */}
       <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-800/80 text-xs">
+        {/* Threshold Alert Filter Toggle */}
+        <button
+          type="button"
+          onClick={() =>
+            setFilters((prev) => ({ ...prev, onlyThresholdAlerts: !prev.onlyThresholdAlerts }))
+          }
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border ${
+            filters.onlyThresholdAlerts
+              ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-sm shadow-amber-500/20'
+              : alertProductsCount > 0
+              ? 'bg-amber-950/40 text-amber-300 border-amber-500/40 hover:bg-amber-950/70'
+              : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200'
+          }`}
+        >
+          <span className="text-amber-400 font-bold">⚡</span>
+          <span>تنبيهات السعر أقل من الحد</span>
+          <span
+            className={`font-mono-numbers px-1.5 py-0.2 rounded-full text-[10px] ${
+              filters.onlyThresholdAlerts
+                ? 'bg-slate-950 text-amber-400 font-bold'
+                : 'bg-slate-850 text-slate-400'
+            }`}
+          >
+            {alertProductsCount}
+          </span>
+        </button>
         {/* Availability Filter Tabs */}
         <div className="flex items-center gap-1 p-0.5 bg-slate-950 rounded-lg border border-slate-800">
           <span className="text-[11px] text-slate-500 px-2">الحالة:</span>
@@ -134,6 +166,37 @@ export const FilterBar: React.FC<FilterBarProps> = ({
                 }`}
               >
                 {labels[status]}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Auto-Integration Status Filter */}
+        <div className="flex items-center gap-1 p-0.5 bg-slate-950 rounded-lg border border-slate-800">
+          <span className="text-[11px] text-slate-500 px-2 flex items-center gap-1">
+            <Wrench className="w-3 h-3 text-amber-400" />
+            <span>حالة الربط:</span>
+          </span>
+          {[
+            { id: 'all', label: 'الكل' },
+            { id: 'ready', label: 'مكتمل' },
+            { id: 'needs_fix', label: '⚠️ يحتاج إصلاح' },
+            { id: 'unmapped', label: 'غير مهيأ' },
+          ].map((item) => {
+            const isActive = (filters.integrationFilter || 'all') === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => setFilters((prev) => ({ ...prev, integrationFilter: item.id as any }))}
+                className={`px-2 py-1 rounded-md text-xs font-medium transition-colors ${
+                  isActive
+                    ? item.id === 'needs_fix'
+                      ? 'bg-amber-500 text-slate-950 font-bold shadow-xs'
+                      : 'bg-indigo-600 text-white shadow-xs'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                {item.label}
               </button>
             );
           })}

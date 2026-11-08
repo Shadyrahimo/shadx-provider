@@ -54,7 +54,9 @@ function createMockCatalog(): RawProviderProduct[] {
     { name: 'UC 30000 + 10500 ببجي العالمية', price: 435.00, type: 'package' },
     { name: 'UC شحن كميات مفتوحة (Flexi)', price: 0.015, type: 'amount', min: 100, max: 50000 },
   ];
-  pubgPackages.forEach((p) => {
+  pubgPackages.forEach((p, idx) => {
+    // Intentionally leave one package with raw unmapped param for testing "إصلاح الربط"
+    const paramsList = idx === 2 ? ['كود_المستخدم_الخاص'] : ['معرف اللاعب [player_id]'];
     products.push({
       id: currentId++,
       name: p.name,
@@ -64,7 +66,7 @@ function createMockCatalog(): RawProviderProduct[] {
       available: true,
       product_type: p.type,
       qty_values: p.type === 'amount' ? { min: p.min!, max: p.max! } : null,
-      params: ['معرف اللاعب [player_id]'],
+      params: paramsList,
     });
   });
 
@@ -97,7 +99,9 @@ function createMockCatalog(): RawProviderProduct[] {
     { name: 'تصريح مستوى (Level Up Pass)', price: 2.10 },
     { name: '100 إلى 15000 جوهرة كمية مفتوحة', price: 0.009, isAmount: true },
   ];
-  ffPackages.forEach((ff) => {
+  ffPackages.forEach((ff, idx) => {
+    // Intentionally leave one package with empty params for testing "إصلاح الربط"
+    const paramsList = idx === 1 ? [] : ['UID', 'معرف اللاعب (Player ID)'];
     products.push({
       id: currentId++,
       name: ff.name,
@@ -107,7 +111,7 @@ function createMockCatalog(): RawProviderProduct[] {
       available: true,
       product_type: ff.isAmount ? 'amount' : 'package',
       qty_values: ff.isAmount ? { min: 100, max: 15000 } : null,
-      params: ['UID', 'معرف اللاعب (Player ID)'],
+      params: paramsList,
     });
   });
 
@@ -125,7 +129,12 @@ function createMockCatalog(): RawProviderProduct[] {
     { name: 'بطاقة عضوية النجمة الترويجية Starlight', price: 4.90 },
     { name: 'باقة شحن ماسات مخصصة (Custom Range)', price: 0.018, isAmount: true },
   ];
-  mlTiers.forEach((ml) => {
+  mlTiers.forEach((ml, idx) => {
+    // Intentionally leave MLBB items with missing Server ID for testing "إصلاح الربط"
+    const paramsList = idx === 0 || idx === 3
+      ? ['معرّف اللاعب [player_id]'] // missing server_id!
+      : ['معرّف اللاعب [player_id]', 'Server ID [server_id]'];
+
     products.push({
       id: currentId++,
       name: ml.name,
@@ -135,7 +144,7 @@ function createMockCatalog(): RawProviderProduct[] {
       available: true,
       product_type: ml.isAmount ? 'amount' : 'package',
       qty_values: ml.isAmount ? { min: 50, max: 50000 } : null,
-      params: ['معرّف اللاعب [player_id]', 'Server ID [server_id]'],
+      params: paramsList,
     });
   });
 

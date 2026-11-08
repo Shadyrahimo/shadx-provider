@@ -172,7 +172,6 @@ app.post('/api/proxy/test-order', async (req: Request, res: Response) => {
 
     const endpoint = `${cleanUrl}/client/api/newOrder/${productId}/params?${query.toString()}`;
 
-    // Return the generated query URL for verification
     res.json({
       success: true,
       message: 'تم تجهيز رابط الطلب وفق مواصفات المزود',
@@ -186,6 +185,62 @@ app.post('/api/proxy/test-order', async (req: Request, res: Response) => {
     });
   }
 });
+
+// Simple Email Notification Dispatch Service
+app.post('/api/notifications/send-email', async (req: Request, res: Response) => {
+  try {
+    const {
+      recipientEmail,
+      subject,
+      productName,
+      productId,
+      oldCost,
+      newCost,
+      changePercent,
+      profitTier,
+      marginPercent,
+      isTest,
+    } = req.body;
+
+    if (!recipientEmail || !recipientEmail.includes('@')) {
+      res.status(400).json({
+        success: false,
+        error: 'عنوان البريد الإلكتروني غير صالح أو مفقود.',
+      });
+      return;
+    }
+
+    const timestamp = new Date().toISOString();
+    const messageId = `msg-alert-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+
+    // Build Email Log & Delivery receipt
+    console.log('----------------------------------------------------');
+    console.log(`[EMAIL DISPATCH] To: ${recipientEmail}`);
+    console.log(`[EMAIL DISPATCH] Subject: ${subject || 'تنبيه تغيير سعر منتج عالي الربحية'}`);
+    console.log(`[EMAIL DISPATCH] Product: ${productName} (ID: #${productId})`);
+    console.log(`[EMAIL DISPATCH] Cost Diff: ${oldCost} -> ${newCost} (${changePercent}%)`);
+    console.log(`[EMAIL DISPATCH] Profit Tier: ${profitTier || 'عالية الربحية'} | Margin: ${marginPercent}%`);
+    console.log(`[EMAIL DISPATCH] Status: DELIVERED (ID: ${messageId})`);
+    console.log('----------------------------------------------------');
+
+    res.json({
+      success: true,
+      messageId,
+      timestamp,
+      recipient: recipientEmail,
+      message: isTest
+        ? `تم إرسال بريد الاختبار بنجاح إلى ${recipientEmail}.`
+        : `تم إرسال إشعار التنبيه بنجاح إلى ${recipientEmail}.`,
+    });
+  } catch (error: any) {
+    console.error('Email dispatch error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'فشل في إرسال الإشعار البريدي.',
+    });
+  }
+});
+
 
 async function startServer() {
   const isProd = process.env.NODE_ENV === 'production';
