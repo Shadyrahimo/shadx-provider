@@ -14,11 +14,13 @@ import {
   Monitor,
   Moon,
   Sun,
+  Scale,
 } from 'lucide-react';
 import { SyncScheduleConfig, MarginConfig, ThemeMode } from '../types';
 
 export type ActiveSectionId =
   | 'catalog'
+  | 'compare'
   | 'connection'
   | 'pricing'
   | 'alerts'
@@ -79,6 +81,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
       badge: totalProductsCount > 0 ? totalProductsCount : undefined,
       mobileBadge: totalProductsCount > 0 ? totalProductsCount : undefined,
       badgeColor: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30',
+    },
+    {
+      id: 'compare',
+      label: 'المقارنة المزدوجة',
+      shortLabel: 'المقارنة',
+      subtitle: 'مقارنة أسعار مزودين معاً لنفس المنتج',
+      icon: Scale,
+      badge: 'مزودين',
+      badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
     },
     {
       id: 'connection',
@@ -380,9 +391,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Mobile Bottom Navigation Bar (Fixed Bottom Bar for Phones & Tablets < lg) */}
       <nav
         aria-label="قائمة التنقل السفلية للهاتف"
-        className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 shadow-[0_-8px_24px_rgba(2,6,23,0.45)] px-1.5 pt-1.5 pb-[max(0.4rem,env(safe-area-inset-bottom))]"
+        className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 shadow-[0_-8px_24px_rgba(2,6,23,0.45)] px-1 pt-1.5 pb-[max(0.4rem,env(safe-area-inset-bottom))]"
       >
-        <div className="grid grid-cols-6 gap-0.5 max-w-xl mx-auto">
+        <div className="grid grid-cols-7 gap-0.5 max-w-xl mx-auto">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeSection === item.id;

@@ -21,6 +21,7 @@ import {
   Tag,
   SlidersHorizontal,
   DollarSign,
+  Scale,
 } from 'lucide-react';
 import { CatalogProduct, NormalizedParam } from '../types';
 
@@ -32,6 +33,7 @@ interface ProductTableProps {
   onOpenProductDetail: (product: CatalogProduct, initialFixMode?: boolean) => void;
   providerBaseUrl: string;
   onGoToConnection?: () => void;
+  onCompareProduct?: (product: CatalogProduct) => void;
 }
 
 export const ProductTable: React.FC<ProductTableProps> = ({
@@ -41,6 +43,7 @@ export const ProductTable: React.FC<ProductTableProps> = ({
   onToggleSelect,
   onOpenProductDetail,
   onGoToConnection,
+  onCompareProduct,
 }) => {
   const [copiedId, setCopiedId] = useState<string | number | null>(null);
   const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
@@ -362,6 +365,17 @@ export const ProductTable: React.FC<ProductTableProps> = ({
                     >
                       <Wrench className="w-3.5 h-3.5" />
                       <span>إصلاح</span>
+                    </button>
+                  )}
+                  {onCompareProduct && (
+                    <button
+                      type="button"
+                      onClick={() => onCompareProduct(product)}
+                      className="px-2.5 py-1.5 bg-emerald-600/20 hover:bg-emerald-600 border border-emerald-500/40 text-emerald-300 hover:text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1"
+                      title="مقارنة سعر هذا المنتج مع مزود ثانٍ"
+                    >
+                      <Scale className="w-3.5 h-3.5" />
+                      <span>مقارنة</span>
                     </button>
                   )}
                   <button
@@ -969,7 +983,7 @@ export const ProductTable: React.FC<ProductTableProps> = ({
                                 )}
                               </div>
 
-                              <div className="flex items-center gap-2 self-end sm:self-auto">
+                              <div className="flex items-center gap-2 self-end sm:self-auto flex-wrap">
                                 <button
                                   type="button"
                                   onClick={(e) => handleCopyId(product.id, e)}
@@ -982,6 +996,17 @@ export const ProductTable: React.FC<ProductTableProps> = ({
                                   )}
                                   <span>نسخ ID</span>
                                 </button>
+
+                                {onCompareProduct && (
+                                  <button
+                                    type="button"
+                                    onClick={() => onCompareProduct(product)}
+                                    className="px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600 border border-emerald-500/40 text-emerald-300 hover:text-white text-[11px] font-bold flex items-center gap-1.5 transition-colors"
+                                  >
+                                    <Scale className="w-3.5 h-3.5" />
+                                    <span>مقارنة مع مزود ثانٍ</span>
+                                  </button>
+                                )}
 
                                 <button
                                   type="button"

@@ -11,6 +11,7 @@ import { AlertsDrawer } from './components/AlertsDrawer';
 import { AlertToast } from './components/AlertToast';
 import { SyncScheduleModal } from './components/SyncScheduleModal';
 import { DeploymentGuideModal } from './components/DeploymentGuideModal';
+import { DualComparisonView } from './components/DualComparisonView';
 import {
   ProviderPreset,
   MarginConfig,
@@ -67,10 +68,17 @@ import {
 export default function App() {
   // Provider settings (persisted in localStorage for real credentials)
   const [selectedPreset, setSelectedPreset] = useState<ProviderPreset>(PROVIDER_PRESETS[0]);
+  const [providerAName, setProviderAName] = useState<string>(
+    () => localStorage.getItem('shadx_provider_a_name') || 'المزود الأول (A)'
+  );
   const [baseUrl, setBaseUrl] = useState<string>(() => localStorage.getItem('shadx_base_url') || '');
   const [apiToken, setApiToken] = useState<string>(() => localStorage.getItem('shadx_api_token') || '');
 
-  // Persist real baseUrl and apiToken in localStorage
+  // Persist real baseUrl, apiToken, and providerAName in localStorage
+  useEffect(() => {
+    localStorage.setItem('shadx_provider_a_name', providerAName);
+  }, [providerAName]);
+
   useEffect(() => {
     localStorage.setItem('shadx_base_url', baseUrl);
   }, [baseUrl]);
@@ -171,6 +179,8 @@ export default function App() {
 
   // Modals & Drawers
   const [activeModalProduct, setActiveModalProduct] = useState<CatalogProduct | null>(null);
+  const [modalProviderUrlOverride, setModalProviderUrlOverride] = useState<string | null>(null);
+  const [focusedCompareProductId, setFocusedCompareProductId] = useState<string | number | null>(null);
   const [modalFixMode, setModalFixMode] = useState<boolean>(false);
   const [isMarginModalOpen, setIsMarginModalOpen] = useState<boolean>(false);
   const [isThresholdModalOpen, setIsThresholdModalOpen] = useState<boolean>(false);
@@ -1675,11 +1685,16 @@ export default function App() {
                 selectedIds={selectedIds}
                 onToggleSelect={handleToggleSelect}
                 onOpenProductDetail={(prod, isFix) => {
+                  setModalProviderUrlOverride(null);
                   setActiveModalProduct(prod);
                   setModalFixMode(Boolean(isFix));
                 }}
                 providerBaseUrl={baseUrl}
                 onGoToConnection={() => setActiveSection('connection')}
+                onCompareProduct={(prod) => {
+                  setFocusedCompareProductId(prod.id);
+                  setActiveSection('compare');
+                }}
               />
 
               {/* Pagination & Density Controls */}
@@ -1747,6 +1762,32 @@ export default function App() {
                 </div>
               )}
             </div>
+          )}
+
+          {/* SECTION 1.5: DUAL PROVIDER PRICE COMPARISON */}
+          {activeSection === 'compare' && (
+            <DualComparisonView
+              providerAName={providerAName}
+              setProviderAName={setProviderAName}
+              baseUrlA={baseUrl}
+              setBaseUrlA={setBaseUrl}
+              apiTokenA={apiToken}
+              setApiTokenA={setApiToken}
+              productsA={catalogProducts}
+              isLiveConnectedA={isLiveConnected}
+              userBalanceA={userBalance}
+              isLoadingA={isLoading}
+              onFetchProviderA={handleFetchProducts}
+              marginConfig={marginConfig}
+              thresholdConfig={thresholdConfig}
+              focusedProductAId={focusedCompareProductId}
+              onClearFocusedProduct={() => setFocusedCompareProductId(null)}
+              onOpenProductDetail={(prod, providerUrlOverride) => {
+                setModalProviderUrlOverride(providerUrlOverride || null);
+                setActiveModalProduct(prod);
+                setModalFixMode(false);
+              }}
+            />
           )}
 
           {/* SECTION 2: PROVIDER CONNECTION & PERIODIC SYNC */}
@@ -1977,9 +2018,10 @@ export default function App() {
         product={activeModalProduct}
         onClose={() => {
           setActiveModalProduct(null);
+          setModalProviderUrlOverride(null);
           setModalFixMode(false);
         }}
-        providerBaseUrl={baseUrl}
+        providerBaseUrl={modalProviderUrlOverride || baseUrl}
         apiToken={apiToken}
         onUpdateProductThreshold={handleUpdateProductThreshold}
         customPriceAlertPercent={
