@@ -95,8 +95,8 @@ export const Header: React.FC<HeaderProps> = ({
     <header className="border-b border-slate-800 bg-slate-900/95 backdrop-blur sticky top-0 z-30">
       {/* Compact Single-Row Top Bar */}
       <div className="px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
-        {/* Right Zone: Mobile Menu Button + Current Section Title */}
-        <div className="flex items-center gap-3 min-w-0">
+        {/* Right Zone: Mobile Menu Button + Mobile Brand Mark + Current Section Title */}
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
           <button
             type="button"
             onClick={onOpenMobileSidebar}
@@ -105,6 +105,25 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <Menu className="w-5 h-5" />
           </button>
+
+          {/* Compact SX + SHADOWX Logo visible on mobile/tablet when Sidebar is closed */}
+          <div
+            onClick={() => onSelectSection('catalog')}
+            className="lg:hidden flex items-center gap-2 pl-2 border-l border-slate-800 shrink-0 cursor-pointer"
+          >
+            <img
+              src="/assets/aistudio/7_20261107_230645______08f45ae0.png"
+              alt="SX"
+              className="w-7 h-7 object-contain"
+            />
+            <div className="hidden sm:flex h-5 w-24 overflow-hidden items-center">
+              <img
+                src="/assets/aistudio/6_20261107_230645______4e8b394e.png"
+                alt="SHADOWX"
+                className="w-full h-20 object-cover object-center select-none pointer-events-none"
+              />
+            </div>
+          </div>
 
           <div className="min-w-0">
             <div className="flex items-center gap-2">

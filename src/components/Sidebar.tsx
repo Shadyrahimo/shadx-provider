@@ -12,7 +12,6 @@ import {
   X,
   ChevronLeft,
 } from 'lucide-react';
-import { IconApiApp } from '@tabler/icons-react';
 import { SyncScheduleConfig, MarginConfig } from '../types';
 
 export type ActiveSectionId =
@@ -124,24 +123,38 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const sidebarContent = (
     <div className="flex flex-col h-full bg-slate-900 border-l border-slate-800 text-slate-200 w-72 shrink-0 select-none">
       {/* Brand Header */}
-      <div className="p-4 border-b border-slate-800 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-md shadow-indigo-600/20 shrink-0">
-            <IconApiApp className="w-6 h-6" stroke={2} />
+      <div className="p-4 border-b border-slate-800 flex items-center justify-between gap-2.5 bg-slate-950/40">
+        <div
+          onClick={() => handleSelect('catalog')}
+          className="flex items-center gap-3 cursor-pointer min-w-0"
+        >
+          {/* SX Icon Mark */}
+          <div className="w-11 h-11 rounded-xl bg-slate-950 border border-indigo-500/30 p-1.5 flex items-center justify-center shadow-md shadow-indigo-950/50 shrink-0">
+            <img
+              src="/assets/aistudio/7_20261107_230645______08f45ae0.png"
+              alt="SX Icon"
+              className="w-full h-full object-contain"
+            />
           </div>
-          <div>
-            <h1 className="text-base font-extrabold text-white tracking-tight font-mono-numbers">
-              ShadX-Provider
-            </h1>
-            <p className="text-[11px] text-slate-400">
-              منصة إدارة وربط مزودي البطاقات
+
+          {/* SHADOWX Website Wordmark Logo + Subtitle */}
+          <div className="min-w-0 flex flex-col justify-center">
+            <div className="h-6 w-36 overflow-hidden flex items-center">
+              <img
+                src="/assets/aistudio/6_20261107_230645______4e8b394e.png"
+                alt="SHADOWX Logo"
+                className="w-full h-24 object-cover object-center select-none pointer-events-none"
+              />
+            </div>
+            <p className="text-[11px] text-slate-400 truncate mt-0.5">
+              ShadX-Provider • إدارة مزودي البطاقات
             </p>
           </div>
         </div>
         <button
           type="button"
           onClick={onCloseMobile}
-          className="lg:hidden p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
+          className="lg:hidden p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 shrink-0"
           aria-label="إغلاق القائمة"
         >
           <X className="w-5 h-5" />
@@ -254,7 +267,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Sidebar Footer */}
       <div className="p-3.5 border-t border-slate-800 text-[11px] text-slate-500 flex items-center justify-between">
-        <span>ShadX-Provider Hub</span>
+        <div className="flex items-center gap-2">
+          <img
+            src="/assets/aistudio/7_20261107_230645______08f45ae0.png"
+            alt="SX"
+            className="w-4 h-4 object-contain opacity-80"
+          />
+          <span>ShadX-Provider Hub</span>
+        </div>
         <span className="font-mono-numbers text-slate-400">RTL Responsive</span>
       </div>
     </div>
