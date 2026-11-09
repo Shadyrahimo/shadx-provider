@@ -767,18 +767,17 @@ export default function App() {
       if (alertRuleConfig.desktopNotificationsEnabled ?? true) {
         const currentPerm = getDesktopNotificationPermission();
         if (currentPerm === 'granted') {
-          newAlerts.slice(0, 5).forEach((alertItem) => {
-            const sent = triggerNativeDesktopNotification({
+          newAlerts.slice(0, 5).forEach((alertItem, idx) => {
+            alertItem.desktopSent = true;
+            triggerNativeDesktopNotification({
               title: `🔔 ${alertItem.title}`,
               body: `${alertItem.productName} (#${alertItem.productId})\n${alertItem.message}`,
               tag: alertItem.id,
+              playSound: idx === 0 && (alertRuleConfig.playSound ?? true),
               onClick: () => {
                 setActiveSection('alerts');
               },
             });
-            if (sent) {
-              alertItem.desktopSent = true;
-            }
           });
         } else if (currentPerm === 'default') {
           requestDesktopNotificationPermission().then((perm) => {
@@ -788,6 +787,7 @@ export default function App() {
                 title: `🔔 ${firstAlert.title}`,
                 body: `${firstAlert.productName} (#${firstAlert.productId})\n${firstAlert.message}`,
                 tag: firstAlert.id,
+                playSound: alertRuleConfig.playSound ?? true,
                 onClick: () => {
                   setActiveSection('alerts');
                 },
@@ -1912,6 +1912,10 @@ export default function App() {
               onSimulateProviderChanges={handleCheckProviderChanges}
               onSelectProduct={(prod) => setActiveModalProduct(prod)}
               productsMap={productsMap}
+              onTriggerTestAlert={(testAlert) => {
+                setAlerts((prev) => [testAlert, ...prev].slice(0, 50));
+                setActiveToastAlert(testAlert);
+              }}
             />
           )}
 

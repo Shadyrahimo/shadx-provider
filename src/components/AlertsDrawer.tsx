@@ -51,6 +51,7 @@ interface AlertsDrawerProps {
   onSelectProduct: (product: CatalogProduct) => void;
   productsMap: Map<string | number, CatalogProduct>;
   inline?: boolean;
+  onTriggerTestAlert?: (alert: AppAlertItem) => void;
 }
 
 export const AlertsDrawer: React.FC<AlertsDrawerProps> = ({
@@ -67,6 +68,7 @@ export const AlertsDrawer: React.FC<AlertsDrawerProps> = ({
   onSelectProduct,
   productsMap,
   inline = false,
+  onTriggerTestAlert,
 }) => {
   if (!isOpen && !inline) return null;
 
@@ -110,25 +112,65 @@ export const AlertsDrawer: React.FC<AlertsDrawerProps> = ({
     }
     setDesktopPermission(perm);
 
-    if (perm !== 'granted') {
+    const now = new Date();
+    const timeFormatted = now.toLocaleTimeString('ar-SA', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+
+    const sampleTestAlert: AppAlertItem = {
+      id: `alert-test-desktop-${Date.now()}`,
+      timestamp: timeFormatted,
+      dateObj: now.toISOString(),
+      productId: 'TEST',
+      productName: 'اختبار إشعارات النظام الفورية (SHADOWX)',
+      category: 'فحص نظام الإشعارات',
+      type: 'price_drop',
+      severity: 'success',
+      title: '🔔 اختبار إشعارات النظام الفورية - SHADOWX',
+      message:
+        'تعمل الإشعارات الفورية والتنبيه الصوتي بنجاح! سيصلك تنبيه فوري عند انخفاض الأسعار أو توفر منتجات جديدة.',
+      oldValue: '$10.000',
+      newValue: '$8.500',
+      changePercent: -15,
+      isRead: false,
+      desktopSent: true,
+    };
+
+    if (perm === 'denied') {
+      if (onTriggerTestAlert) {
+        onTriggerTestAlert(sampleTestAlert);
+      }
       setTestDesktopStatus(
-        perm === 'denied'
-          ? '❌ تعذر الإرسال لأن إشعارات المتصفح محظورة (Denied). اسمح بها من إعدادات موقع المتصفح.'
-          : '⚠️ يرجى الموافقة على نافذة صلاحية الإشعارات في المتصفح أولاً.'
+        '⚠️ تم عرض الإشعار داخل التطبيق، لكن إشعارات المتصفح الخارجية محظورة (Denied). اسمح بها من إعدادات موقع المتصفح.'
       );
       return;
     }
 
-    const sent = triggerNativeDesktopNotification({
-      title: '🔔 اختبار إشعارات النظام - ShadX-Provider',
-      body: 'تعمل إشعارات سطح المكتب الفورية بنجاح! سيصلك تنبيه فوري على نظامك فور حدوث أي تغير في الأسعار أو التوفر.',
+    const result = await triggerNativeDesktopNotification({
+      title: '🔔 اختبار إشعارات النظام - SHADOWX',
+      body: 'تعمل إشعارات النظام والهاتف الفورية بنجاح! سيصلك تنبيه فوري فور حدوث أي تغير في الأسعار أو التوفر.',
       tag: `shadx-test-desktop-${Date.now()}`,
+      playSound: ruleConfig.playSound ?? true,
     });
 
-    if (sent) {
-      setTestDesktopStatus('✅ تم إطلاق إشعار سطح المكتب الفوري (Native Desktop Notification) بنجاح!');
+    if (onTriggerTestAlert) {
+      onTriggerTestAlert(sampleTestAlert);
+    }
+
+    if (result.sent && result.method === 'service_worker') {
+      setTestDesktopStatus(
+        '✅ تم إرسال إشعار النظام الفوري بنجاح إلى شريط إشعارات الهاتف/المتصفح (عبر Service Worker) مع التنبيه الصوتي!'
+      );
+    } else if (result.sent) {
+      setTestDesktopStatus(
+        '✅ تم إطلاق إشعار النظام الفوري (Native Notification) بنجاح مع التنبيه الصوتي!'
+      );
     } else {
-      setTestDesktopStatus('❌ تعذر إطلاق إشعار النظام. تأكد من عدم تفعيل وضع عدم الإزعاج في نظام التشغيل.');
+      setTestDesktopStatus(
+        '✅ تم تشغيل الإشعار الفوري والمنبه الصوتي داخل التطبيق بنجاح! (ملاحظة: لإظهار الإشعار في شريط الهاتف العلوي خارج المتصفح، افتح رابط التطبيق في تبويب مستقل أو فعّل ربط بوت تلجرام أدناه).'
+      );
     }
   };
 

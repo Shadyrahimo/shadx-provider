@@ -1,0 +1,25 @@
+{
+  "name": "SHADOWX - مدير كتالوج المنتجات والربط الذكي",
+  "short_name": "SHADOWX",
+  "description": "منصة متقدمة لإدارة وتحليل كتالوج المنتجات الرقمية، حساب هوامش الربح، والتنبيهات الفورية",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#020617",
+  "dir": "rtl",
+  "lang": "ar",
+  "icons": [
+    {
+      "src": "/assets/aistudio/7_20261107_230645______08f45ae0.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/assets/aistudio/7_20261107_230645______08f45ae0.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
