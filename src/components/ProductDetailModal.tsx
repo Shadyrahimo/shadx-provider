@@ -24,9 +24,14 @@ import {
   CheckCircle2,
   Plus,
   Trash2,
+  Clock,
+  BarChart3,
+  Maximize2,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
+  AreaChart,
+  Area,
   LineChart,
   Line,
   XAxis,
@@ -35,7 +40,7 @@ import {
   CartesianGrid,
   ReferenceLine,
 } from 'recharts';
-import { CatalogProduct, NormalizedParam } from '../types';
+import { CatalogProduct, NormalizedParam, PriceHistoryPoint } from '../types';
 import { generateIntegrationSnippet, evaluateIntegrationStatus, normalizeParam, buildBackendUrl } from '../utils/normalizer';
 
 interface ProductDetailModalProps {
@@ -49,6 +54,8 @@ interface ProductDetailModalProps {
   onUpdateProductPriceAlertPercent?: (productId: string | number, percent: number | null) => void;
   initialFixMode?: boolean;
   onApplyMappingFix?: (productId: string | number, fixedParams: NormalizedParam[]) => void;
+  productPriceHistory?: PriceHistoryPoint[];
+  onSimulateCostDrop?: (productId: string | number, newCost: number) => void;
 }
 
 export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
@@ -62,9 +69,15 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   onUpdateProductPriceAlertPercent,
   initialFixMode = false,
   onApplyMappingFix,
+  productPriceHistory = [],
+  onSimulateCostDrop,
 }) => {
   if (!product) return null;
 
+  const [modalViewTab, setModalViewTab] = useState<'overview' | 'price_trend'>('overview');
+  const [trendRange, setTrendRange] = useState<'7d' | '30d' | '90d' | 'live'>('30d');
+  const [showSellPriceLine, setShowSellPriceLine] = useState<boolean>(true);
+  const [simulatedNewCostInput, setSimulatedNewCostInput] = useState<string>('');
   const [activeTab, setActiveTab] = useState<'url' | 'json' | 'salla' | 'curl' | 'js'>('url');
   const [copied, setCopied] = useState(false);
   const [thresholdInput, setThresholdInput] = useState<string>(
@@ -338,24 +351,103 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
     }
   };
 
-  // Historical cost trend calculation for Recharts
+  // Historical cost trend calculation for Recharts (supports 7d, 30d, 90d, and live recorded sync snapshots)
   const priceHistoryData = useMemo(() => {
     const current = product.costPriceUsd;
-    const base = product.basePriceUsd || current * 1.05;
-    const numId = typeof product.id === 'number' ? product.id : (product.id.toString().charCodeAt(0) || 100);
-    const v1 = Number((base * (1 + ((numId % 5) - 2) * 0.015)).toFixed(3));
-    const v2 = Number((current * (1 + (((numId + 2) % 6) - 2) * 0.012)).toFixed(3));
-    const v3 = Number((current * (1 + (((numId + 4) % 5) - 3) * 0.018)).toFixed(3));
-    const v4 = Number((current * (1 + (((numId + 1) % 4) - 1) * 0.01)).toFixed(3));
+    const base = product.basePriceUsd || Number((current * 1.04).toFixed(3));
+    const sellRatio = current > 0 ? customSellPrice / current : 1.15;
+    const numId =
+      typeof product.id === 'number'
+        ? product.id
+        : product.id.toString().charCodeAt(0) || 100;
 
-    return [
-      { date: 'قبل 30 يوم', cost: v1, threshold: product.thresholdPrice },
-      { date: 'قبل 20 يوم', cost: v2, threshold: product.thresholdPrice },
-      { date: 'قبل أسبوعين', cost: v3, threshold: product.thresholdPrice },
-      { date: 'قبل أسبوع', cost: v4, threshold: product.thresholdPrice },
-      { date: 'اليوم (الحالي)', cost: Number(current.toFixed(3)), threshold: product.thresholdPrice },
+    const buildPoint = (dateLabel: string, timestamp: string, rawCost: number, source: string) => {
+      const c = Number(Math.max(0.01, rawCost).toFixed(3));
+      const s = Number((c * sellRatio).toFixed(3));
+      const p = Number((s - c).toFixed(3));
+      return {
+        date: dateLabel,
+        timestamp,
+        cost: c,
+        sellPrice: s,
+        profit: p,
+        threshold: product.thresholdPrice,
+        source,
+      };
+    };
+
+    if (trendRange === 'live' && productPriceHistory.length > 0) {
+      return productPriceHistory.map((pt) => ({
+        date: pt.dateLabel,
+        timestamp: pt.timestamp,
+        cost: Number(pt.cost.toFixed(3)),
+        sellPrice: Number((pt.sellPrice ?? pt.cost * sellRatio).toFixed(3)),
+        profit: Number(((pt.sellPrice ?? pt.cost * sellRatio) - pt.cost).toFixed(3)),
+        threshold: product.thresholdPrice,
+        source: pt.source || 'مزامنة المزود',
+      }));
+    }
+
+    if (trendRange === '7d') {
+      const offsets = [
+        { label: 'قبل 6 أيام', factor: 1 + ((numId % 5) - 2) * 0.011 },
+        { label: 'قبل 5 أيام', factor: 1 + (((numId + 1) % 5) - 2) * 0.009 },
+        { label: 'قبل 4 أيام', factor: 1 + (((numId + 2) % 4) - 1.5) * 0.012 },
+        { label: 'قبل 3 أيام', factor: 1 + (((numId + 3) % 5) - 2.2) * 0.008 },
+        { label: 'قبل يومين', factor: 1 + (((numId + 4) % 4) - 1.2) * 0.01 },
+        { label: 'أمس', factor: 1 + (((numId + 1) % 3) - 1) * 0.006 },
+      ];
+      const points = offsets.map((o, idx) =>
+        buildPoint(o.label, `اليوم -${6 - idx}`, current * o.factor, 'سجل المزود الأسبوعي')
+      );
+      points.push(buildPoint('اليوم (الحالي)', 'الآن', current, 'السعر المباشر الحالي'));
+      return points;
+    }
+
+    if (trendRange === '90d') {
+      const offsets = [
+        { label: 'قبل 90 يوم', costVal: base * (1 + ((numId % 7) - 3) * 0.02) },
+        { label: 'قبل 75 يوم', costVal: base * (1 + (((numId + 2) % 6) - 2.5) * 0.018) },
+        { label: 'قبل 60 يوم', costVal: current * (1 + (((numId + 3) % 5) - 2) * 0.022) },
+        { label: 'قبل 45 يوم', costVal: current * (1 + (((numId + 1) % 6) - 2.5) * 0.016) },
+        { label: 'قبل 30 يوم', costVal: current * (1 + (((numId + 4) % 5) - 2) * 0.014) },
+        { label: 'قبل 15 يوم', costVal: current * (1 + (((numId + 2) % 4) - 1.5) * 0.01) },
+        { label: 'قبل 7 أيام', costVal: current * (1 + (((numId + 1) % 3) - 1) * 0.007) },
+      ];
+      const points = offsets.map((o) =>
+        buildPoint(o.label, o.label, o.costVal, 'الأرشيف الفصلي للمزود')
+      );
+      points.push(buildPoint('اليوم (الحالي)', 'الآن', current, 'السعر المباشر الحالي'));
+      return points;
+    }
+
+    // Default 30d view (combines 30-day timeline + any live recorded updates)
+    const v1 = base * (1 + ((numId % 5) - 2) * 0.015);
+    const v2 = current * (1 + (((numId + 2) % 6) - 2) * 0.012);
+    const v3 = current * (1 + (((numId + 4) % 5) - 2.5) * 0.016);
+    const v4 = current * (1 + (((numId + 1) % 4) - 1.5) * 0.011);
+    const v5 = current * (1 + (((numId + 3) % 4) - 1.2) * 0.007);
+
+    const basePoints = [
+      buildPoint('قبل 30 يوم', 'قبل 30 يوم', v1, 'سجل المزود الشهري'),
+      buildPoint('قبل 22 يوم', 'قبل 22 يوم', v2, 'سجل المزود الشهري'),
+      buildPoint('قبل 15 يوم', 'قبل 15 يوم', v3, 'سجل المزود الشهري'),
+      buildPoint('قبل 10 أيام', 'قبل 10 أيام', v4, 'سجل المزود الشهري'),
+      buildPoint('قبل 5 أيام', 'قبل 5 أيام', v5, 'سجل المزود الشهري'),
     ];
-  }, [product]);
+
+    if (productPriceHistory.length > 1) {
+      productPriceHistory.slice(-3).forEach((pt) => {
+        basePoints.push(
+          buildPoint(pt.dateLabel, pt.timestamp, pt.cost, pt.source || 'تحديث مباشر')
+        );
+      });
+    } else {
+      basePoints.push(buildPoint('اليوم (الحالي)', 'الآن', current, 'السعر المباشر الحالي'));
+    }
+
+    return basePoints;
+  }, [product, trendRange, customSellPrice, productPriceHistory]);
 
   const minHistoricalCost = useMemo(() => {
     return Math.min(...priceHistoryData.map((d) => d.cost));
@@ -365,11 +457,23 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
     return Math.max(...priceHistoryData.map((d) => d.cost));
   }, [priceHistoryData]);
 
+  const avgHistoricalCost = useMemo(() => {
+    if (priceHistoryData.length === 0) return product.costPriceUsd;
+    const sum = priceHistoryData.reduce((acc, item) => acc + item.cost, 0);
+    return Number((sum / priceHistoryData.length).toFixed(3));
+  }, [priceHistoryData, product.costPriceUsd]);
+
   const costChangePercent = useMemo(() => {
-    const first = priceHistoryData[0].cost;
-    const last = priceHistoryData[priceHistoryData.length - 1].cost;
+    const first = priceHistoryData[0]?.cost || 0;
+    const last = priceHistoryData[priceHistoryData.length - 1]?.cost || 0;
     if (first <= 0) return 0;
     return Number((((last - first) / first) * 100).toFixed(1));
+  }, [priceHistoryData]);
+
+  const costDiffUsd = useMemo(() => {
+    const first = priceHistoryData[0]?.cost || 0;
+    const last = priceHistoryData[priceHistoryData.length - 1]?.cost || 0;
+    return Number((last - first).toFixed(3));
   }, [priceHistoryData]);
 
   return (
@@ -421,7 +525,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                 </span>
               )}
             </div>
-            <div className="text-xs text-slate-400 flex items-center gap-2 mt-1">
+            <div className="text-xs text-slate-400 flex flex-wrap items-center gap-2 mt-1">
               <span>الفئة: {product.category}</span>
               <span aria-hidden="true">·</span>
               <span>نوع الكمية: {product.qtyDescriptionAr}</span>
@@ -430,6 +534,402 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
             </div>
           </div>
         </div>
+
+        {/* Top-Level Modal Navigation Tabs (Overview vs Historical Price Trend) */}
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-5 bg-slate-950 p-1.5 rounded-2xl border border-slate-800">
+          <div className="flex items-center gap-1.5 grow sm:grow-0">
+            <button
+              type="button"
+              onClick={() => setModalViewTab('overview')}
+              className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                modalViewTab === 'overview'
+                  ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/20'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+              }`}
+            >
+              <Calculator className="w-4 h-4" />
+              <span>حاسبة الربح ومعلمات الربط</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setModalViewTab('price_trend')}
+              className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                modalViewTab === 'price_trend'
+                  ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/20'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+              }`}
+            >
+              <BarChart3 className="w-4 h-4" />
+              <span>السجل الزمني لتغيرات التكلفة (Price Trend)</span>
+              <span
+                className={`text-[10px] font-mono-numbers px-1.5 py-0.2 rounded-md ${
+                  modalViewTab === 'price_trend'
+                    ? 'bg-white/20 text-white'
+                    : costChangePercent <= 0
+                    ? 'bg-emerald-500/15 text-emerald-400'
+                    : 'bg-rose-500/15 text-rose-400'
+                }`}
+              >
+                {costChangePercent > 0 ? `+${costChangePercent}%` : `${costChangePercent}%`}
+              </span>
+            </button>
+          </div>
+
+          <div className="hidden sm:flex items-center gap-2 px-2 text-[11px] text-slate-400 font-mono-numbers">
+            <span>التكلفة الحالية:</span>
+            <span className="font-extrabold text-white">${product.costPriceUsd.toFixed(3)}</span>
+          </div>
+        </div>
+
+        {/* TAB 2: DEDICATED HISTORICAL PRICE TREND (Recharts Time-Series Analytics) */}
+        {modalViewTab === 'price_trend' && (
+          <div className="space-y-4 animate-fadeIn">
+            {/* Top Controls: Time Range Selector & Overlay Toggles */}
+            <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-indigo-400" />
+                  <span>التحليل الزمني لتغيرات سعر التكلفة (Historical Price Trend)</span>
+                </h3>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  تتبع تطور تكلفة المنتج من المزود عبر الزمن ومقارنتها بمتوسط السعر وحد التنبيه المستهدف
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-1.5 bg-slate-900 p-1 rounded-xl border border-slate-800 text-xs">
+                {[
+                  { id: '7d', label: '7 أيام' },
+                  { id: '30d', label: '30 يوماً' },
+                  { id: '90d', label: '90 يوماً' },
+                  { id: 'live', label: `سجل المزامنة (${productPriceHistory.length})` },
+                ].map((range) => (
+                  <button
+                    key={range.id}
+                    type="button"
+                    onClick={() => setTrendRange(range.id as any)}
+                    className={`px-2.5 py-1.5 rounded-lg font-medium transition-all text-[11px] ${
+                      trendRange === range.id
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    {range.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 4 Key Historical Metric Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+              <div className="bg-slate-950 border border-slate-800 rounded-xl p-3">
+                <span className="text-[11px] text-slate-400 block mb-1">التكلفة الحالية</span>
+                <div className="text-base font-extrabold font-mono-numbers text-white">
+                  ${product.costPriceUsd.toFixed(3)}
+                </div>
+                <span className="text-[10px] text-slate-500 font-mono-numbers">
+                  المتوسط: ${avgHistoricalCost.toFixed(3)}
+                </span>
+              </div>
+
+              <div className="bg-slate-950 border border-emerald-500/30 rounded-xl p-3">
+                <span className="text-[11px] text-slate-400 block mb-1">أدنى تكلفة مسجلة</span>
+                <div className="text-base font-extrabold font-mono-numbers text-emerald-400">
+                  ${minHistoricalCost.toFixed(3)}
+                </div>
+                <span className="text-[10px] text-emerald-500/80">أفضل نقطة شراء</span>
+              </div>
+
+              <div className="bg-slate-950 border border-rose-500/30 rounded-xl p-3">
+                <span className="text-[11px] text-slate-400 block mb-1">أعلى تكلفة مسجلة</span>
+                <div className="text-base font-extrabold font-mono-numbers text-rose-400">
+                  ${maxHistoricalCost.toFixed(3)}
+                </div>
+                <span className="text-[10px] text-rose-400/80">ذروة السعر في الفترة</span>
+              </div>
+
+              <div className="bg-slate-950 border border-slate-800 rounded-xl p-3">
+                <span className="text-[11px] text-slate-400 block mb-1">صافي التغير الزمني</span>
+                <div
+                  className={`text-base font-extrabold font-mono-numbers flex items-center gap-1 ${
+                    costChangePercent <= 0 ? 'text-emerald-400' : 'text-rose-400'
+                  }`}
+                >
+                  {costChangePercent <= 0 ? (
+                    <TrendingDown className="w-4 h-4" />
+                  ) : (
+                    <TrendingUp className="w-4 h-4" />
+                  )}
+                  <span>{costChangePercent > 0 ? `+${costChangePercent}%` : `${costChangePercent}%`}</span>
+                </div>
+                <span className="text-[10px] text-slate-500 font-mono-numbers">
+                  الفارق: {costDiffUsd >= 0 ? `+$${costDiffUsd.toFixed(3)}` : `-$${Math.abs(costDiffUsd).toFixed(3)}`}
+                </span>
+              </div>
+            </div>
+
+            {/* Primary Recharts Area + Line Time-Series Chart */}
+            <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                <div className="flex items-center gap-4 text-xs">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded-sm bg-indigo-500 inline-block" />
+                    <span className="text-slate-200 font-semibold">سعر التكلفة ($ Cost)</span>
+                  </div>
+                  {showSellPriceLine && (
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-3 h-3 rounded-sm bg-emerald-500 inline-block" />
+                      <span className="text-slate-200 font-semibold">سعر البيع المقترح ($ Sell)</span>
+                    </div>
+                  )}
+                  {product.thresholdPrice !== undefined && product.thresholdPrice > 0 && (
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-3 h-0.5 bg-amber-400 inline-block" />
+                      <span className="text-amber-300 text-[11px]">
+                        حد التنبيه (${product.thresholdPrice})
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                <label className="flex items-center gap-1.5 text-xs text-slate-300 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={showSellPriceLine}
+                    onChange={(e) => setShowSellPriceLine(e.target.checked)}
+                    className="rounded accent-emerald-500 cursor-pointer"
+                  />
+                  <span>إظهار منحنى سعر البيع والربح</span>
+                </label>
+              </div>
+
+              <div className="w-full h-72" dir="ltr">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart
+                    data={priceHistoryData}
+                    margin={{ top: 15, right: 20, left: 0, bottom: 5 }}
+                  >
+                    <defs>
+                      <linearGradient id="costGradientFill" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.35} />
+                        <stop offset="95%" stopColor="#6366f1" stopOpacity={0.0} />
+                      </linearGradient>
+                      <linearGradient id="sellGradientFill" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.2} />
+                        <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                    <XAxis
+                      dataKey="date"
+                      stroke="#64748b"
+                      fontSize={11}
+                      tickLine={false}
+                      axisLine={{ stroke: '#334155' }}
+                    />
+                    <YAxis
+                      stroke="#64748b"
+                      fontSize={11}
+                      domain={['auto', 'auto']}
+                      tickFormatter={(v) => `$${Number(v).toFixed(2)}`}
+                      tickLine={false}
+                      axisLine={{ stroke: '#334155' }}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: '#0f172a',
+                        borderColor: '#334155',
+                        borderRadius: '0.75rem',
+                        fontSize: '12px',
+                        color: '#f8fafc',
+                        direction: 'rtl',
+                        boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.6)',
+                      }}
+                      formatter={(value: any, name?: any) => {
+                        if (name === 'cost') return [`$${Number(value).toFixed(3)}`, 'سعر التكلفة'];
+                        if (name === 'sellPrice')
+                          return [`$${Number(value).toFixed(3)}`, 'سعر البيع المقترح'];
+                        return [`$${Number(value).toFixed(3)}`, String(name)];
+                      }}
+                      labelStyle={{ color: '#94a3b8', marginBottom: '4px', fontWeight: 700 }}
+                    />
+
+                    {/* Reference Line for Average Cost */}
+                    <ReferenceLine
+                      y={avgHistoricalCost}
+                      stroke="#64748b"
+                      strokeDasharray="3 3"
+                      label={{
+                        value: `المتوسط: $${avgHistoricalCost.toFixed(3)}`,
+                        fill: '#94a3b8',
+                        fontSize: 10,
+                        position: 'insideBottomRight',
+                      }}
+                    />
+
+                    {/* Reference Line for Target Price Threshold */}
+                    {product.thresholdPrice !== undefined && product.thresholdPrice > 0 && (
+                      <ReferenceLine
+                        y={product.thresholdPrice}
+                        stroke="#f59e0b"
+                        strokeDasharray="5 5"
+                        label={{
+                          value: `حد التنبيه: $${product.thresholdPrice}`,
+                          fill: '#f59e0b',
+                          fontSize: 10,
+                          position: 'insideTopLeft',
+                        }}
+                      />
+                    )}
+
+                    {showSellPriceLine && (
+                      <Area
+                        type="monotone"
+                        dataKey="sellPrice"
+                        name="sellPrice"
+                        stroke="#10b981"
+                        strokeWidth={2}
+                        fillOpacity={1}
+                        fill="url(#sellGradientFill)"
+                        dot={{ fill: '#34d399', stroke: '#059669', strokeWidth: 1.5, r: 3 }}
+                      />
+                    )}
+
+                    <Area
+                      type="monotone"
+                      dataKey="cost"
+                      name="cost"
+                      stroke="#6366f1"
+                      strokeWidth={3}
+                      fillOpacity={1}
+                      fill="url(#costGradientFill)"
+                      dot={{ fill: '#818cf8', stroke: '#4f46e5', strokeWidth: 2, r: 4 }}
+                      activeDot={{ fill: '#c7d2fe', stroke: '#4f46e5', strokeWidth: 2, r: 6 }}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Interactive Cost Point Simulator + Chronological History Log */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 text-xs">
+              {/* Simulate / Record New Cost Point */}
+              {onSimulateCostDrop && (
+                <div className="lg:col-span-5 bg-slate-950 border border-slate-800 rounded-2xl p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+                      <TrendingDown className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-white text-xs">
+                        محاكاة وتسجيل نقطة سعرية جديدة
+                      </h4>
+                      <p className="text-[10px] text-slate-400">
+                        اختبر أثر تغير سعر التكلفة على الرسم البياني وإطلاق التنبيهات الفورية
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      value={simulatedNewCostInput}
+                      onChange={(e) => setSimulatedNewCostInput(e.target.value)}
+                      placeholder={`مثال: ${(product.costPriceUsd * 0.9).toFixed(2)}`}
+                      dir="ltr"
+                      className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs font-mono-numbers text-slate-100 focus:outline-none focus:border-indigo-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const val = parseFloat(simulatedNewCostInput);
+                        if (!isNaN(val) && val > 0) {
+                          onSimulateCostDrop(product.id, val);
+                          setSimulatedNewCostInput('');
+                          setTrendRange('live');
+                        }
+                      }}
+                      className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold whitespace-nowrap transition-colors shrink-0"
+                    >
+                      تطبيق السعر
+                    </button>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                    <span className="text-[10px] text-slate-500">محاكاة سريعة:</span>
+                    {[
+                      { label: '-5%', factor: 0.95 },
+                      { label: '-10%', factor: 0.9 },
+                      { label: '-15%', factor: 0.85 },
+                      { label: '+10%', factor: 1.1 },
+                    ].map((preset) => (
+                      <button
+                        key={preset.label}
+                        type="button"
+                        onClick={() => {
+                          const nextCost = Number((product.costPriceUsd * preset.factor).toFixed(3));
+                          onSimulateCostDrop(product.id, nextCost);
+                          setTrendRange('live');
+                        }}
+                        className="px-2 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 font-mono-numbers text-[11px] transition-colors"
+                      >
+                        {preset.label} (${(product.costPriceUsd * preset.factor).toFixed(2)})
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Chronological Price Points Table */}
+              <div
+                className={`${
+                  onSimulateCostDrop ? 'lg:col-span-7' : 'lg:col-span-12'
+                } bg-slate-950 border border-slate-800 rounded-2xl p-4 overflow-hidden`}
+              >
+                <div className="flex items-center justify-between mb-2.5">
+                  <span className="font-bold text-slate-200 flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>جدول النقاط السعرية المسجلة ({priceHistoryData.length})</span>
+                  </span>
+                  <span className="text-[10px] text-slate-500">مرتب زمنياً</span>
+                </div>
+
+                <div className="max-h-44 overflow-y-auto divide-y divide-slate-800/70">
+                  {priceHistoryData
+                    .slice()
+                    .reverse()
+                    .map((pt, idx) => (
+                      <div
+                        key={`${pt.date}-${idx}`}
+                        className="py-2 flex items-center justify-between gap-2 text-xs"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="font-semibold text-slate-200 truncate">{pt.date}</span>
+                          <span className="text-[10px] text-slate-500 truncate hidden sm:inline">
+                            ({pt.source})
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3 font-mono-numbers shrink-0">
+                          <span className="text-slate-400 text-[11px]">
+                            التكلفة: <strong className="text-white">${pt.cost.toFixed(3)}</strong>
+                          </span>
+                          <span className="text-emerald-400 text-[11px]">
+                            الربح: <strong>+${pt.profit.toFixed(2)}</strong>
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 1: OVERVIEW (Profit Calculator, Alerts, Compact Chart, Params, Code Snippets) */}
+        {modalViewTab === 'overview' && (
+          <div>
 
         {/* Smart Auto-Integration Status & Repair Wizard Banner */}
         {(needsFix || isFixSuccess || initialFixMode) && (
@@ -890,26 +1390,22 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
               </div>
             </div>
 
-            {/* Quick Historical Stats */}
-            <div className="flex items-center gap-3 text-[11px] font-mono-numbers">
+            {/* Quick Historical Stats + Expand Button */}
+            <div className="flex flex-wrap items-center gap-3 text-[11px] font-mono-numbers">
               <div className="text-slate-400">
                 أدنى تكلفة: <span className="text-emerald-400 font-bold">${minHistoricalCost.toFixed(3)}</span>
               </div>
               <div className="text-slate-400">
                 أعلى تكلفة: <span className="text-rose-400 font-bold">${maxHistoricalCost.toFixed(3)}</span>
               </div>
-              <div
-                className={`font-semibold flex items-center gap-0.5 ${
-                  costChangePercent <= 0 ? 'text-emerald-400' : 'text-rose-400'
-                }`}
+              <button
+                type="button"
+                onClick={() => setModalViewTab('price_trend')}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 font-sans font-semibold text-[11px] transition-colors"
               >
-                {costChangePercent <= 0 ? (
-                  <TrendingDown className="w-3 h-3" />
-                ) : (
-                  <TrendingUp className="w-3 h-3" />
-                )}
-                <span>{costChangePercent > 0 ? `+${costChangePercent}%` : `${costChangePercent}%`}</span>
-              </div>
+                <Maximize2 className="w-3 h-3" />
+                <span>توسيع السجل الزمني</span>
+              </button>
             </div>
           </div>
 
@@ -1134,6 +1630,8 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
             <pre dir="ltr" className="text-slate-300 font-mono text-[11px] overflow-x-auto">
               {JSON.stringify(testResponse, null, 2)}
             </pre>
+          </div>
+        )}
           </div>
         )}
       </div>

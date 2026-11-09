@@ -23,6 +23,7 @@ import {
   SyncScheduleConfig,
   NormalizedParam,
   ThemeMode,
+  PriceHistoryPoint,
 } from './types';
 import { PROVIDER_PRESETS } from './data/mockCatalog';
 import {
@@ -233,6 +234,25 @@ export default function App() {
 
   // Alert Log History (clean — only populated by real provider status/price changes)
   const [alerts, setAlerts] = useState<AppAlertItem[]>([]);
+
+  // Historical Price Trend Points per product ID (persisted in localStorage)
+  const [priceHistoryMap, setPriceHistoryMap] = useState<Record<string | number, PriceHistoryPoint[]>>(() => {
+    try {
+      const saved = localStorage.getItem('shadx_price_history');
+      if (saved) return JSON.parse(saved);
+    } catch {
+      // Ignore storage error
+    }
+    return {};
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('shadx_price_history', JSON.stringify(priceHistoryMap));
+    } catch {
+      // Ignore storage quota error
+    }
+  }, [priceHistoryMap]);
 
   // Product snapshot ref to detect status and cost changes
   const previousProductsRef = useRef<Map<string | number, RawProviderProduct>>(new Map());
@@ -700,6 +720,47 @@ export default function App() {
 
       // Update snapshot
       prevMap.set(newProd.id, { ...newProd });
+    });
+
+    // Record price history points for synced / changed products
+    setPriceHistoryMap((prevHist) => {
+      const nextHist = { ...prevHist };
+      let changed = false;
+
+      newProducts.forEach((p) => {
+        const costVal = typeof p.price === 'number' ? p.price : parseFloat(String(p.price)) || 0;
+        if (costVal <= 0) return;
+
+        const existingPoints = nextHist[p.id] || [];
+        const lastPoint = existingPoints[existingPoints.length - 1];
+
+        // Record if no history yet or if cost changed
+        if (!lastPoint || lastPoint.cost !== costVal) {
+          const sellVal =
+            marginConfig.mode === 'percentage'
+              ? Number((costVal * (1 + marginConfig.value / 100)).toFixed(4))
+              : Number((costVal + marginConfig.value).toFixed(4));
+          const profitVal = Number((sellVal - costVal).toFixed(4));
+          const prodThresh =
+            thresholdConfig.productThresholds[p.id] ||
+            (typeof thresholdConfig.defaultThreshold === 'number' ? thresholdConfig.defaultThreshold : undefined);
+
+          const newPoint: PriceHistoryPoint = {
+            timestamp: now.toISOString(),
+            dateLabel: timeFormatted,
+            cost: Number(costVal.toFixed(4)),
+            sellPrice: sellVal,
+            profit: profitVal,
+            threshold: prodThresh,
+            source: sourceLabel.includes('تخفيض') ? 'simulation' : 'sync',
+          };
+
+          nextHist[p.id] = [...existingPoints, newPoint].slice(-30);
+          changed = true;
+        }
+      });
+
+      return changed ? nextHist : prevHist;
     });
 
     if (newAlerts.length > 0) {
@@ -1176,8 +1237,16 @@ export default function App() {
     );
     setRawProducts(updated);
     detectAndGenerateAlerts(updated, 'تخفيض التكلفة اليدوي');
+
+    if (activeModalProduct && String(activeModalProduct.id) === String(productId)) {
+      const targetRaw = updated.find((p) => String(p.id) === String(productId));
+      if (targetRaw) {
+        setActiveModalProduct(transformRawProduct(targetRaw, marginConfig, thresholdConfig));
+      }
+    }
+
     setNotification({
-      text: `⚡ محاكاة انخفاض السعر: تم تخفيض تكلفة منتج #${productId} إلى $${newLowerCost} وتسجيل الحدث في سجل التنبيهات!`,
+      text: `⚡ محاكاة تغير السعر: تم تحديث تكلفة منتج #${productId} إلى $${newLowerCost} وتحديث السجل الزمني للتكلفة!`,
       type: 'success',
     });
   };
@@ -1889,6 +1958,10 @@ export default function App() {
         onUpdateProductPriceAlertPercent={handleUpdateProductPriceAlertPercent}
         initialFixMode={modalFixMode}
         onApplyMappingFix={handleApplyMappingFix}
+        productPriceHistory={
+          activeModalProduct ? priceHistoryMap[activeModalProduct.id] || [] : []
+        }
+        onSimulateCostDrop={handleSimulateCostDrop}
       />
 
       {/* Real-time Alert Toast Notification */}

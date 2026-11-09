@@ -164,6 +164,17 @@ export interface SyncScheduleConfig {
 
 export type ThemeMode = 'system' | 'dark' | 'light';
 
+export interface PriceHistoryPoint {
+  timestamp: string;
+  dateLabel: string;
+  cost: number;
+  sellPrice?: number;
+  profit?: number;
+  threshold?: number;
+  source?: string;
+}
+
+
 
 
 
