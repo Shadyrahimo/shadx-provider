@@ -1274,11 +1274,11 @@ export default function App() {
         />
 
         {/* Main Viewport */}
-        <main className="grow max-w-7xl w-full mx-auto px-3 sm:px-6 py-4 sm:py-6">
+        <main className="grow max-w-[1600px] w-full mx-auto px-3 sm:px-5 lg:px-8 py-4 sm:py-6">
           {/* Floating Notification */}
           {notification && (
             <div
-              className={`mb-4 p-3 rounded-xl border flex items-center justify-between text-xs transition-all ${
+              className={`mb-4 p-3.5 rounded-xl border flex items-center justify-between text-xs transition-all ${
                 notification.type === 'success'
                   ? 'bg-emerald-950/70 border-emerald-500/30 text-emerald-300'
                   : notification.type === 'error'
@@ -1309,40 +1309,43 @@ export default function App() {
           {activeSection === 'catalog' && (
             <div>
               {/* Quick KPI Strip */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 mb-4 text-xs">
-                <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 flex items-center justify-center shrink-0">
+              <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2.5 sm:gap-3.5 mb-4 text-xs">
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 flex items-center gap-3 shadow-2xs">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 flex items-center justify-center shrink-0">
                     <Package className="w-4 h-4" />
                   </div>
                   <div className="min-w-0">
-                    <span className="text-slate-400 block text-[11px] truncate">إجمالي المنتجات</span>
-                    <span className="text-sm font-bold font-mono-numbers text-white">
-                      {catalogProducts.length}
+                    <span className="text-slate-400 block text-[11px] truncate mb-0.5">إجمالي المنتجات</span>
+                    <span className="text-base font-extrabold font-mono-numbers text-white">
+                      {catalogProducts.length.toLocaleString('en-US')}
                     </span>
                   </div>
                 </div>
 
-                <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center shrink-0">
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 flex items-center gap-3 shadow-2xs">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center shrink-0">
                     <CheckCircle2 className="w-4 h-4" />
                   </div>
                   <div className="min-w-0">
-                    <span className="text-slate-400 block text-[11px] truncate">منتجات متوفرة</span>
-                    <span className="text-sm font-bold font-mono-numbers text-emerald-400">
-                      {availableCount}
+                    <span className="text-slate-400 block text-[11px] truncate mb-0.5">منتجات متوفرة</span>
+                    <span className="text-base font-extrabold font-mono-numbers text-emerald-400">
+                      {availableCount.toLocaleString('en-US')}
                     </span>
                   </div>
                 </div>
 
-                <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center justify-center shrink-0">
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 flex items-center gap-3 shadow-2xs">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center justify-center shrink-0">
                     <Layers className="w-4 h-4" />
                   </div>
                   <div className="min-w-0">
-                    <span className="text-slate-400 block text-[11px] truncate">التصنيفات المتاحة</span>
-                    <span className="text-sm font-bold font-mono-numbers text-amber-300">
-                      {categoriesWithCounts.length} فئة
-                    </span>
+                    <span className="text-slate-400 block text-[11px] truncate mb-0.5">التصنيفات المتاحة</span>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-base font-extrabold font-mono-numbers text-amber-300">
+                        {categoriesWithCounts.length}
+                      </span>
+                      <span className="text-[11px] text-amber-400/80 font-medium">فئة</span>
+                    </div>
                   </div>
                 </div>
 
@@ -1354,14 +1357,14 @@ export default function App() {
                       onlyThresholdAlerts: !prev.onlyThresholdAlerts,
                     }))
                   }
-                  className={`border rounded-xl p-3 flex items-center gap-3 cursor-pointer transition-all ${
+                  className={`border rounded-2xl p-3.5 flex items-center gap-3 cursor-pointer transition-all shadow-2xs ${
                     alertProductsCount > 0
                       ? 'bg-amber-950/30 border-amber-500/40 hover:bg-amber-950/50'
                       : 'bg-slate-900 border-slate-800 hover:bg-slate-800/80'
                   }`}
                 >
                   <div
-                    className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+                    className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
                       alertProductsCount > 0
                         ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
                         : 'bg-slate-800 text-slate-400 border border-slate-700'
@@ -1370,28 +1373,31 @@ export default function App() {
                     <BellRing className="w-4 h-4" />
                   </div>
                   <div className="min-w-0">
-                    <span className="text-slate-400 block text-[11px] truncate">انخفاض التكلفة</span>
-                    <span
-                      className={`text-sm font-bold font-mono-numbers ${
-                        alertProductsCount > 0 ? 'text-amber-300' : 'text-slate-400'
-                      }`}
-                    >
-                      {alertProductsCount} منتج
-                    </span>
+                    <span className="text-slate-400 block text-[11px] truncate mb-0.5">انخفاض التكلفة</span>
+                    <div className="flex items-baseline gap-1">
+                      <span
+                        className={`text-base font-extrabold font-mono-numbers ${
+                          alertProductsCount > 0 ? 'text-amber-300' : 'text-slate-400'
+                        }`}
+                      >
+                        {alertProductsCount}
+                      </span>
+                      <span className="text-[11px] text-slate-400 font-medium">منتج</span>
+                    </div>
                   </div>
                 </div>
 
                 {/* Status & Price Alerts Center Card */}
                 <div
                   onClick={() => setActiveSection('alerts')}
-                  className={`border rounded-xl p-3 flex items-center gap-3 cursor-pointer transition-all ${
+                  className={`border rounded-2xl p-3.5 flex items-center gap-3 cursor-pointer transition-all shadow-2xs ${
                     unreadAlertsCount > 0
                       ? 'bg-indigo-950/40 border-indigo-500/50 hover:bg-indigo-950/60'
                       : 'bg-slate-900 border-slate-800 hover:bg-slate-800/80'
                   }`}
                 >
                   <div
-                    className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+                    className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
                       unreadAlertsCount > 0
                         ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/40'
                         : 'bg-slate-800 text-slate-400 border border-slate-700'
@@ -1400,27 +1406,32 @@ export default function App() {
                     <Bell className="w-4 h-4" />
                   </div>
                   <div className="min-w-0">
-                    <span className="text-slate-400 block text-[11px] truncate">سجل التنبيهات</span>
-                    <span
-                      className={`text-sm font-bold font-mono-numbers ${
-                        unreadAlertsCount > 0 ? 'text-indigo-300' : 'text-slate-400'
-                      }`}
-                    >
-                      {unreadAlertsCount > 0 ? `${unreadAlertsCount} جديد` : `${alerts.length} تنبيه`}
-                    </span>
+                    <span className="text-slate-400 block text-[11px] truncate mb-0.5">سجل التنبيهات</span>
+                    <div className="flex items-baseline gap-1">
+                      <span
+                        className={`text-base font-extrabold font-mono-numbers ${
+                          unreadAlertsCount > 0 ? 'text-indigo-300' : 'text-slate-400'
+                        }`}
+                      >
+                        {unreadAlertsCount > 0 ? unreadAlertsCount : alerts.length}
+                      </span>
+                      <span className="text-[11px] text-slate-400 font-medium">
+                        {unreadAlertsCount > 0 ? 'جديد' : 'تنبيه'}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
                 <div
                   onClick={() => setActiveSection('pricing')}
-                  className="bg-slate-900 border border-slate-800 hover:bg-slate-800/80 rounded-xl p-3 flex items-center gap-3 cursor-pointer transition-colors"
+                  className="bg-slate-900 border border-slate-800 hover:bg-slate-800/80 rounded-2xl p-3.5 flex items-center gap-3 cursor-pointer transition-colors shadow-2xs"
                 >
-                  <div className="w-9 h-9 rounded-lg bg-violet-500/10 text-violet-400 border border-violet-500/20 flex items-center justify-center shrink-0">
+                  <div className="w-10 h-10 rounded-xl bg-violet-500/10 text-violet-400 border border-violet-500/20 flex items-center justify-center shrink-0">
                     <TrendingUp className="w-4 h-4" />
                   </div>
                   <div className="min-w-0">
-                    <span className="text-slate-400 block text-[11px] truncate">هامش الربح النشط</span>
-                    <span className="text-sm font-bold font-mono-numbers text-violet-300">
+                    <span className="text-slate-400 block text-[11px] truncate mb-0.5">هامش الربح النشط</span>
+                    <span className="text-base font-extrabold font-mono-numbers text-violet-300">
                       {marginConfig.mode === 'percentage' ? `+${marginConfig.value}%` : `+$${marginConfig.value}`}
                     </span>
                   </div>

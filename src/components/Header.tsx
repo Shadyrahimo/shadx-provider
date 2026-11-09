@@ -11,6 +11,8 @@ import {
   Monitor,
   Moon,
   Sun,
+  Clock,
+  PlugZap,
 } from 'lucide-react';
 import {
   ProviderPreset,
@@ -48,33 +50,6 @@ interface HeaderProps {
   onChangeThemeMode: (mode: ThemeMode) => void;
 }
 
-const SECTION_TITLES: Record<ActiveSectionId, { title: string; subtitle: string }> = {
-  catalog: {
-    title: 'كتالوج المنتجات والفلاتر الذكية',
-    subtitle: 'استعراض المنتجات، مطابقة المعلمات، وتحليل هوامش الربح',
-  },
-  connection: {
-    title: 'ربط المزود وجدولة المزامنة الدورية',
-    subtitle: 'إعداد اتصال الـ API الحقيقي وضبط الفحص التلقائي في الخلفية',
-  },
-  pricing: {
-    title: 'إعدادات هامش الربح والحدود السعرية',
-    subtitle: 'ضبط قواعد التسعير الآلي وتنبيهات انخفاض التكلفة',
-  },
-  alerts: {
-    title: 'سجل ومركز التنبيهات الذكي',
-    subtitle: 'متابعة تغيرات الأسعار وحالة التوفر وإشعارات البريد الإلكتروني',
-  },
-  docs: {
-    title: 'توثيق الـ API البرمجي والأكواد',
-    subtitle: 'مواصفات نقاط النهاية، ترويسات التوثيق، ورموز الأخطاء',
-  },
-  deploy: {
-    title: 'دليل النشر السحابي الشامل',
-    subtitle: 'خطوات النشر وحل الأخطاء على GitHub + Neon + Render + Vercel',
-  },
-};
-
 export const Header: React.FC<HeaderProps> = ({
   activeSection,
   onSelectSection,
@@ -92,6 +67,7 @@ export const Header: React.FC<HeaderProps> = ({
   userEmail,
   totalProductsCount,
   unreadAlertsCount,
+  syncConfig,
   themeMode,
   resolvedTheme,
   onChangeThemeMode,
@@ -99,18 +75,16 @@ export const Header: React.FC<HeaderProps> = ({
   const [showToken, setShowToken] = useState(false);
   const [showQuickConnect, setShowQuickConnect] = useState(!isLiveConnected);
 
-  const currentMeta = SECTION_TITLES[activeSection];
-
   return (
-    <header className="border-b border-slate-800 bg-slate-900/95 backdrop-blur sticky top-0 z-30">
-      {/* Compact Single-Row Top Bar */}
-      <div className="px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
-        {/* Right Zone: Mobile Menu Button + Mobile Brand Mark + Current Section Title */}
-        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+    <header className="border-b border-slate-800 bg-slate-900/95 backdrop-blur-md sticky top-0 z-30">
+      {/* Sleek Single-Row Top Bar (No Cluttered Section Titles) */}
+      <div className="max-w-[1600px] mx-auto px-3 sm:px-5 lg:px-8 h-14 sm:h-16 flex items-center justify-between gap-2 sm:gap-4">
+        {/* Right Zone: Mobile Menu + Brand Mark + Compact Connection Status Pill */}
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <button
             type="button"
             onClick={onOpenMobileSidebar}
-            className="lg:hidden p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 shrink-0"
+            className="lg:hidden p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 shrink-0 transition-colors"
             aria-label="فتح القائمة الجانبية"
           >
             <Menu className="w-5 h-5" />
@@ -135,40 +109,62 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           </div>
 
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h2 className="text-sm sm:text-base font-bold text-white truncate">
-                {currentMeta.title}
-              </h2>
-              <span className="hidden md:inline-block text-slate-600">·</span>
-              <span className="hidden md:inline-block text-xs text-slate-400 truncate">
-                {currentMeta.subtitle}
-              </span>
-            </div>
+          {/* Clean Live Provider Status Badge */}
+          <div className="flex items-center gap-2 min-w-0">
+            {isLiveConnected ? (
+              <div
+                onClick={() => onSelectSection('connection')}
+                className="flex items-center gap-2 bg-emerald-950/50 border border-emerald-500/30 text-emerald-300 px-3 py-1.5 rounded-xl text-xs cursor-pointer hover:bg-emerald-950/70 transition-colors truncate"
+              >
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                <span className="font-semibold truncate">متصل بالمزود</span>
+                <span className="font-mono-numbers font-bold text-emerald-400 hidden sm:inline">
+                  ({totalProductsCount})
+                </span>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => onSelectSection('connection')}
+                className="flex items-center gap-1.5 bg-slate-950 hover:bg-slate-800 border border-slate-800 text-slate-300 px-3 py-1.5 rounded-xl text-xs transition-colors truncate"
+              >
+                <PlugZap className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                <span className="font-medium truncate">إعداد ربط المزود</span>
+              </button>
+            )}
+
+            {syncConfig.lastSyncTime && (
+              <div
+                onClick={() => onSelectSection('connection')}
+                className="hidden md:flex items-center gap-1.5 bg-slate-950 border border-slate-800 text-slate-400 px-2.5 py-1.5 rounded-xl text-[11px] cursor-pointer hover:border-slate-700 transition-colors"
+                title="وقت آخر مزامنة مع المزود"
+              >
+                <Clock className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                <span>آخر تحديث:</span>
+                <span className="font-mono-numbers font-semibold text-slate-200">
+                  {syncConfig.lastSyncTime}
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Left Zone: Status + Quick Actions */}
-        <div className="flex items-center gap-2 shrink-0">
-          {/* Live Balance / Status */}
-          {userBalance !== null ? (
+        {/* Left Zone: Balance + Theme Switcher + Alerts + Quick Actions */}
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          {/* Live Balance Pill */}
+          {userBalance !== null && (
             <div className="hidden sm:flex items-center gap-1.5 bg-emerald-950/50 border border-emerald-500/30 text-emerald-300 px-3 py-1.5 rounded-xl text-xs">
-              <Wallet className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="font-bold font-mono-numbers text-emerald-400">
+              <Wallet className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+              <span className="font-extrabold font-mono-numbers text-emerald-400">
                 ${parseFloat(userBalance).toLocaleString('en-US', { minimumFractionDigits: 2 })}
               </span>
               {userEmail && (
-                <span className="hidden xl:inline text-emerald-400/70 text-[11px]">
+                <span className="hidden 2xl:inline text-emerald-400/70 text-[11px] font-mono-numbers">
                   ({userEmail})
                 </span>
               )}
             </div>
-          ) : isLiveConnected ? (
-            <div className="hidden sm:flex items-center gap-1.5 bg-emerald-950/40 border border-emerald-500/30 text-emerald-400 px-3 py-1.5 rounded-xl text-xs">
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>متصل ({totalProductsCount})</span>
-            </div>
-          ) : null}
+          )}
 
           {/* Theme Switcher (System Auto / Dark Current / Light) */}
           <div className="flex items-center bg-slate-950 border border-slate-800 rounded-xl p-0.5 text-xs">
@@ -222,7 +218,7 @@ export const Header: React.FC<HeaderProps> = ({
                 ? 'bg-indigo-600 text-white border-indigo-500'
                 : unreadAlertsCount > 0
                 ? 'bg-indigo-950/80 border-indigo-500/50 text-indigo-300'
-                : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-white'
+                : 'bg-slate-950 border-slate-800 text-slate-300 hover:text-white'
             }`}
             title="سجل التنبيهات"
           >
@@ -242,7 +238,7 @@ export const Header: React.FC<HeaderProps> = ({
               className={`p-2 rounded-xl border text-xs transition-colors ${
                 showQuickConnect
                   ? 'bg-indigo-600/20 border-indigo-500/40 text-indigo-300'
-                  : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
+                  : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
               }`}
               title="إظهار / إخفاء شريط الاتصال السريع بالمزود"
             >
@@ -255,18 +251,21 @@ export const Header: React.FC<HeaderProps> = ({
             type="button"
             onClick={onFetchProducts}
             disabled={isLoading}
-            className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-semibold text-xs flex items-center gap-1.5 transition-colors disabled:opacity-50 whitespace-nowrap shrink-0 shadow-sm shadow-indigo-600/20"
+            className="px-3 sm:px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-semibold text-xs flex items-center gap-1.5 transition-colors disabled:opacity-50 whitespace-nowrap shrink-0 shadow-sm shadow-indigo-600/20"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-            <span>{isLoading ? 'جارِ الجلب...' : 'جلب وتحديث المنتجات'}</span>
+            <span className="hidden xs:inline sm:inline">
+              {isLoading ? 'جارِ الجلب...' : 'جلب وتحديث المنتجات'}
+            </span>
+            <span className="xs:hidden sm:hidden">{isLoading ? '...' : 'تحديث'}</span>
           </button>
         </div>
       </div>
 
       {/* Collapsible Quick Provider Connection Bar (shown on Catalog page when toggled) */}
       {activeSection === 'catalog' && showQuickConnect && (
-        <div className="bg-slate-950/90 border-t border-slate-800/80 px-4 sm:px-6 py-2.5">
-          <div className="flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-2.5">
+        <div className="bg-slate-950/90 border-t border-slate-800/80">
+          <div className="max-w-[1600px] mx-auto px-3 sm:px-5 lg:px-8 py-2.5 flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-2.5">
             {/* Presets Quick Picker */}
             <div className="flex items-center gap-1.5 overflow-x-auto pb-1 xl:pb-0">
               <span className="text-xs text-slate-400 shrink-0 font-medium ml-1">

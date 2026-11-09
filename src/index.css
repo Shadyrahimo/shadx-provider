@@ -59,14 +59,27 @@
   }
 
   body {
-    font-family: 'IBM Plex Sans Arabic', system-ui, -apple-system, sans-serif;
+    font-family: 'Readex Pro', 'IBM Plex Sans Arabic', system-ui, -apple-system, sans-serif;
+    font-feature-settings: 'kern' 1, 'liga' 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    line-height: 1.6;
     transition: background-color 0.2s ease, color 0.2s ease;
   }
   
   .font-mono-numbers {
-    font-family: 'Fira Code', 'JetBrains Mono', ui-monospace, monospace;
-    font-variant-numeric: tabular-nums slashed-zero;
-    font-feature-settings: 'tnum' 1, 'zero' 1;
+    font-family: 'Plus Jakarta Sans', 'JetBrains Mono', system-ui, -apple-system, sans-serif;
+    font-variant-numeric: tabular-nums lining-nums;
+    font-feature-settings: 'tnum' 1, 'zero' 0, 'cv01' 1;
+    letter-spacing: -0.015em;
+    unicode-bidi: isolate;
+  }
+
+  code, pre, .font-mono {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
   }
 }
 
