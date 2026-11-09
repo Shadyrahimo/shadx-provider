@@ -66,6 +66,9 @@ export const AlertsDrawer: React.FC<AlertsDrawerProps> = ({
   const [showConfig, setShowConfig] = useState<boolean>(inline);
   const [isSendingTestEmail, setIsSendingTestEmail] = useState<boolean>(false);
   const [testEmailStatus, setTestEmailStatus] = useState<string | null>(null);
+  const [isSendingTestTelegram, setIsSendingTestTelegram] = useState<boolean>(false);
+  const [testTelegramStatus, setTestTelegramStatus] = useState<string | null>(null);
+  const [showTelegramToken, setShowTelegramToken] = useState<boolean>(false);
   const [selectedProductIdToAdd, setSelectedProductIdToAdd] = useState<string | number | ''>('');
 
   const handleAddProductToCustomAlert = () => {
@@ -142,11 +145,58 @@ export const AlertsDrawer: React.FC<AlertsDrawerProps> = ({
     }
   };
 
+  const handleSendTestTelegram = async () => {
+    if (!ruleConfig.telegramBotToken?.trim() || !ruleConfig.telegramChatId?.trim()) {
+      setTestTelegramStatus('⚠️ يرجى إدخال رمز البوت (Bot Token) ومعرف المحادثة (Chat ID) أولاً.');
+      return;
+    }
+
+    setIsSendingTestTelegram(true);
+    setTestTelegramStatus(null);
+
+    try {
+      const res = await fetch(buildBackendUrl('/api/notifications/send-telegram'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          botToken: ruleConfig.telegramBotToken,
+          chatId: ruleConfig.telegramChatId,
+          title: 'اختبار ربط بوت تلجرام - ShadX-Provider',
+          productName: 'فحص جاهزية الإشعارات الفورية (انخفاض التكلفة وتوفر المنتجات)',
+          productId: 'TG-TEST',
+          category: 'اختبار الربط المباشر',
+          oldValue: '$10.000',
+          newValue: '$8.500',
+          changePercent: -15,
+          message: 'تم ربط بوت تلجرام بنجاح! ستصلك الإشعارات الفورية هنا فور انخفاض الأسعار أو توفر منتجات جديدة.',
+          eventType: 'price_drop',
+          isTest: true,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setTestTelegramStatus(`✅ ${data.message}`);
+      } else {
+        setTestTelegramStatus(`❌ ${data.error || 'فشل الإرسال إلى تلجرام'}`);
+      }
+    } catch (e: any) {
+      setTestTelegramStatus(`❌ خطأ في الاتصال: ${e.message}`);
+    } finally {
+      setIsSendingTestTelegram(false);
+    }
+  };
+
   // Filter alerts based on activeTab
   const filteredAlerts = alerts.filter((alert) => {
     if (activeTab === 'unread') return !alert.isRead;
     if (activeTab === 'price') return alert.type === 'price_drop' || alert.type === 'price_hike';
-    if (activeTab === 'availability') return alert.type === 'availability_oos' || alert.type === 'availability_back';
+    if (activeTab === 'availability')
+      return (
+        alert.type === 'availability_oos' ||
+        alert.type === 'availability_back' ||
+        alert.type === 'new_product'
+      );
     if (activeTab === 'threshold') return alert.type === 'threshold_breach';
     return true;
   });
@@ -157,6 +207,8 @@ export const AlertsDrawer: React.FC<AlertsDrawerProps> = ({
         return <TrendingDown className="w-4 h-4 text-emerald-400" />;
       case 'price_hike':
         return <TrendingUp className="w-4 h-4 text-rose-400" />;
+      case 'new_product':
+        return <Sparkles className="w-4 h-4 text-sky-400" />;
       case 'availability_back':
         return <PackageCheck className="w-4 h-4 text-emerald-400" />;
       case 'availability_oos':
@@ -666,6 +718,169 @@ export const AlertsDrawer: React.FC<AlertsDrawerProps> = ({
                       </div>
                     )}
                   </div>
+
+                  {/* Telegram Bot Instant Notifications Integration */}
+                  <div className="pt-2.5 mt-1 border-t border-slate-800">
+                    <label className="flex items-center justify-between cursor-pointer p-1.5 rounded hover:bg-slate-900/60">
+                      <div>
+                        <span className="text-slate-100 font-semibold flex items-center gap-1.5">
+                          <Send className="w-3.5 h-3.5 text-sky-400" />
+                          ربط بوت تلجرام للإشعارات الفورية (Telegram Bot Alerts)
+                        </span>
+                        <span className="text-[11px] text-slate-400">
+                          إرسال إشعارات فورية إلى حسابك أو قناتك على تلجرام عند انخفاض التكلفة أو توفر منتجات جديدة
+                        </span>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={Boolean(ruleConfig.telegramNotificationsEnabled)}
+                        onChange={(e) =>
+                          onUpdateRuleConfig({
+                            ...ruleConfig,
+                            telegramNotificationsEnabled: e.target.checked,
+                          })
+                        }
+                        className="w-4 h-4 rounded accent-sky-500 cursor-pointer"
+                      />
+                    </label>
+
+                    {ruleConfig.telegramNotificationsEnabled && (
+                      <div className="mt-2.5 mr-1 p-3.5 bg-slate-900 rounded-xl border border-sky-500/30 space-y-3">
+                        {/* Bot Token & Chat ID Inputs */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-[11px] font-medium text-slate-300 mb-1">
+                              1. رمز بوت تلجرام (Bot Token من @BotFather):
+                            </label>
+                            <div className="relative">
+                              <input
+                                type={showTelegramToken ? 'text' : 'password'}
+                                value={ruleConfig.telegramBotToken || ''}
+                                onChange={(e) =>
+                                  onUpdateRuleConfig({
+                                    ...ruleConfig,
+                                    telegramBotToken: e.target.value,
+                                  })
+                                }
+                                placeholder="123456789:ABCdefGHIjklMNOpqrSTUvwxYZ"
+                                className="w-full bg-slate-950 border border-slate-700 rounded-lg pl-12 pr-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-sky-500 font-mono"
+                                dir="ltr"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowTelegramToken(!showTelegramToken)}
+                                className="absolute inset-y-0 left-0 pl-2.5 pr-1.5 flex items-center text-[10px] text-sky-400 hover:text-sky-300 font-medium"
+                              >
+                                {showTelegramToken ? 'إخفاء' : 'عرض'}
+                              </button>
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-[11px] font-medium text-slate-300 mb-1">
+                              2. معرف المحادثة أو القناة (Chat ID):
+                            </label>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="text"
+                                value={ruleConfig.telegramChatId || ''}
+                                onChange={(e) =>
+                                  onUpdateRuleConfig({
+                                    ...ruleConfig,
+                                    telegramChatId: e.target.value,
+                                  })
+                                }
+                                placeholder="مثال: 987654321 أو -100123456789"
+                                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-sky-500 font-mono"
+                                dir="ltr"
+                              />
+                              <button
+                                type="button"
+                                onClick={handleSendTestTelegram}
+                                disabled={isSendingTestTelegram}
+                                className="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 disabled:bg-slate-800 disabled:text-slate-500 text-white font-medium text-xs whitespace-nowrap transition-colors flex items-center gap-1 shrink-0"
+                                title="إرسال رسالة اختبار حقيقية إلى تلجرام للتأكد من صحة الربط"
+                              >
+                                {isSendingTestTelegram ? (
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                ) : (
+                                  <Send className="w-3.5 h-3.5" />
+                                )}
+                                <span>تجربة تلجرام</span>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+
+                        {testTelegramStatus && (
+                          <div
+                            className={`text-[11px] p-2 rounded-lg border font-medium ${
+                              testTelegramStatus.startsWith('✅')
+                                ? 'bg-emerald-950/60 border-emerald-500/30 text-emerald-300'
+                                : 'bg-rose-950/60 border-rose-500/30 text-rose-300'
+                            }`}
+                          >
+                            {testTelegramStatus}
+                          </div>
+                        )}
+
+                        {/* Event Triggers Selection */}
+                        <div className="space-y-2 pt-2 border-t border-slate-800/80">
+                          <span className="block text-[11px] font-semibold text-sky-300">
+                            أحداث الإرسال الفوري إلى تلجرام:
+                          </span>
+
+                          <label className="flex items-center justify-between cursor-pointer p-1.5 rounded bg-slate-950/60 border border-slate-800/80 hover:border-slate-700">
+                            <div>
+                              <span className="text-slate-200 font-medium block">
+                                📉 إشعار فوري عند انخفاض التكلفة أو كسر الحد السعري
+                              </span>
+                              <span className="text-[10px] text-slate-400">
+                                إرسال تنبيه لتلجرام فور هبوط سعر تكلفة أي منتج لدى المزود للاستفادة من فرق الربح
+                              </span>
+                            </div>
+                            <input
+                              type="checkbox"
+                              checked={ruleConfig.telegramNotifyOnCostDrop ?? true}
+                              onChange={(e) =>
+                                onUpdateRuleConfig({
+                                  ...ruleConfig,
+                                  telegramNotifyOnCostDrop: e.target.checked,
+                                })
+                              }
+                              className="w-4 h-4 rounded accent-sky-500 cursor-pointer"
+                            />
+                          </label>
+
+                          <label className="flex items-center justify-between cursor-pointer p-1.5 rounded bg-slate-950/60 border border-slate-800/80 hover:border-slate-700">
+                            <div>
+                              <span className="text-slate-200 font-medium block">
+                                🆕 إشعار فوري عند توفر منتجات جديدة أو عودة التوفر
+                              </span>
+                              <span className="text-[10px] text-slate-400">
+                                إرسال تنبيه لتلجرام فور إضافة المزود لمنتجات جديدة في الكتالوج أو عودة منتج نافد للتوفر
+                              </span>
+                            </div>
+                            <input
+                              type="checkbox"
+                              checked={ruleConfig.telegramNotifyOnNewOrAvailableProducts ?? true}
+                              onChange={(e) =>
+                                onUpdateRuleConfig({
+                                  ...ruleConfig,
+                                  telegramNotifyOnNewOrAvailableProducts: e.target.checked,
+                                })
+                              }
+                              className="w-4 h-4 rounded accent-sky-500 cursor-pointer"
+                            />
+                          </label>
+                        </div>
+
+                        <div className="text-[10px] text-slate-400 bg-slate-950/70 p-2 rounded-lg border border-slate-800/80">
+                          💡 <b>طريقة سريعة:</b> أنشئ بوت عبر <code>@BotFather</code> في تلجرام وانسخ التوكن، ثم أرسل رسالة للبوت واحصل على معرف حسابك عبر <code>@userinfobot</code>.
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
@@ -824,8 +1039,8 @@ export const AlertsDrawer: React.FC<AlertsDrawerProps> = ({
                     )}
                   </div>
 
-                  {/* Email & Profit Tier Badges */}
-                  {(alert.emailSent || alert.isHighProfit) && (
+                  {/* Email, Telegram & Profit Tier Badges */}
+                  {(alert.emailSent || alert.telegramSent || alert.isHighProfit) && (
                     <div className="flex flex-wrap items-center gap-1.5 mb-2 text-[10px]">
                       {alert.isHighProfit && (
                         <span className="bg-emerald-950/70 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded font-medium flex items-center gap-1">
@@ -836,6 +1051,12 @@ export const AlertsDrawer: React.FC<AlertsDrawerProps> = ({
                         <span className="bg-indigo-950/70 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded font-medium flex items-center gap-1 font-mono">
                           <Mail className="w-3 h-3 text-indigo-400" />
                           <span>إشعار بريدي: {alert.emailRecipient}</span>
+                        </span>
+                      )}
+                      {alert.telegramSent && (
+                        <span className="bg-sky-950/70 text-sky-300 border border-sky-500/30 px-2 py-0.5 rounded font-medium flex items-center gap-1 font-mono">
+                          <Send className="w-3 h-3 text-sky-400" />
+                          <span>إشعار تلجرام فوري ({alert.telegramChatId})</span>
                         </span>
                       )}
                     </div>

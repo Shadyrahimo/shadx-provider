@@ -98,6 +98,7 @@ export type AlertSeverity = 'warning' | 'info' | 'success' | 'danger';
 export type AlertType =
   | 'availability_oos'      // نفاذ الكمية / أصبح غير متوفر
   | 'availability_back'     // عودة التوفر / أصبح متاحاً للطلب
+  | 'new_product'           // توفر منتج جديد في الكتالوج
   | 'price_drop'            // انخفاض سعر التكلفة من المزود
   | 'price_hike'            // ارتفاع سعر التكلفة من المزود
   | 'threshold_breach';     // هبوط التكلفة تحت حد الأمان المطلوب
@@ -119,6 +120,8 @@ export interface AppAlertItem {
   isRead: boolean;
   emailSent?: boolean;
   emailRecipient?: string;
+  telegramSent?: boolean;
+  telegramChatId?: string;
   isHighProfit?: boolean;
   customPercentageThreshold?: number;
 }
@@ -138,6 +141,12 @@ export interface AlertRuleConfig {
   recipientEmail: string;
   emailOnHighProfitOnly: boolean; // Only for high profitability products (≥20% profit margin)
   emailPriceChangeThresholdPercent: number; // Significant price change threshold (e.g. >= 10%)
+  // Telegram Bot Instant Notifications
+  telegramNotificationsEnabled: boolean;
+  telegramBotToken: string;
+  telegramChatId: string;
+  telegramNotifyOnCostDrop: boolean;
+  telegramNotifyOnNewOrAvailableProducts: boolean;
 }
 
 export interface SyncScheduleConfig {

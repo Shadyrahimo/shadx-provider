@@ -9,6 +9,8 @@ import {
   Zap,
   ArrowRight,
   Eye,
+  Sparkles,
+  Send,
 } from 'lucide-react';
 import { AppAlertItem } from '../types';
 
@@ -41,6 +43,8 @@ export const AlertToast: React.FC<AlertToastProps> = ({
         return <TrendingDown className="w-5 h-5 text-emerald-400" />;
       case 'price_hike':
         return <TrendingUp className="w-5 h-5 text-rose-400" />;
+      case 'new_product':
+        return <Sparkles className="w-5 h-5 text-sky-400" />;
       case 'availability_back':
         return <PackageCheck className="w-5 h-5 text-emerald-400" />;
       case 'availability_oos':
@@ -79,13 +83,19 @@ export const AlertToast: React.FC<AlertToastProps> = ({
               {getAlertIcon()}
             </div>
             <div>
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="text-xs font-bold text-white block">
                   {alert.title}
                 </span>
                 <span className="text-[10px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-1.5 py-0.2 rounded font-mono">
                   #{alert.productId}
                 </span>
+                {alert.telegramSent && (
+                  <span className="text-[10px] bg-sky-500/20 text-sky-300 border border-sky-500/30 px-1.5 py-0.2 rounded flex items-center gap-1">
+                    <Send className="w-2.5 h-2.5" />
+                    <span>تلجرام</span>
+                  </span>
+                )}
               </div>
               <p className="text-[11px] text-slate-300 line-clamp-1">
                 {alert.productName}

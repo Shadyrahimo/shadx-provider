@@ -255,6 +255,130 @@ app.post('/api/notifications/send-email', async (req: Request, res: Response) =>
 });
 
 
+// Real Telegram Bot Notification Dispatch Service
+app.post('/api/notifications/send-telegram', async (req: Request, res: Response) => {
+  try {
+    const {
+      botToken,
+      chatId,
+      title,
+      productName,
+      productId,
+      category,
+      message,
+      oldValue,
+      newValue,
+      changePercent,
+      eventType,
+      isTest,
+    } = req.body;
+
+    if (!botToken || !String(botToken).trim() || !chatId || !String(chatId).trim()) {
+      res.status(400).json({
+        success: false,
+        error: 'يرجى إدخال رمز البوت (Bot Token) ومعرف المحادثة (Chat ID) بشكل صحيح.',
+      });
+      return;
+    }
+
+    const cleanToken = String(botToken).trim();
+    const cleanChatId = String(chatId).trim();
+    const nowFormatted = new Date().toLocaleString('ar-SA', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+
+    let eventEmoji = '🔔';
+    let eventLabel = 'إشعار فوري من النظام';
+    if (isTest) {
+      eventEmoji = '✅';
+      eventLabel = 'اختبار ربط بوت تلجرام بنجاح';
+    } else if (eventType === 'price_drop' || eventType === 'threshold_breach') {
+      eventEmoji = '📉';
+      eventLabel = 'انخفاض في سعر التكلفة';
+    } else if (eventType === 'new_product') {
+      eventEmoji = '🆕';
+      eventLabel = 'توفر منتج جديد في الكتالوج';
+    } else if (eventType === 'availability_back') {
+      eventEmoji = '📦';
+      eventLabel = 'عودة توفر منتج للطلب الفوري';
+    }
+
+    const lines: string[] = [
+      `${eventEmoji} <b>${title || eventLabel}</b>`,
+      `━━━━━━━━━━━━━━━`,
+      `🏷 <b>المنتج:</b> ${productName || 'منتج قياسي'}`,
+      `🆔 <b>المعرف:</b> <code>#${productId ?? 'TEST'}</code>`,
+    ];
+
+    if (category) {
+      lines.push(`📂 <b>التصنيف:</b> ${category}`);
+    }
+    if (oldValue !== undefined && newValue !== undefined) {
+      lines.push(`🔄 <b>التغير:</b> ${oldValue} ⬅️ <b>${newValue}</b>`);
+    }
+    if (changePercent !== undefined && changePercent !== 0) {
+      lines.push(`📊 <b>نسبة التغير:</b> <code>${changePercent > 0 ? `+${changePercent}%` : `${changePercent}%`}</code>`);
+    }
+    if (message) {
+      lines.push(`📝 <b>التفاصيل:</b> ${message}`);
+    }
+
+    lines.push(`━━━━━━━━━━━━━━━`);
+    lines.push(`⏱ <i>${nowFormatted} • ShadX-Provider</i>`);
+
+    const telegramText = lines.join('\n');
+    const telegramUrl = `https://api.telegram.org/bot${cleanToken}/sendMessage`;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    const tgRes = await fetch(telegramUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: cleanChatId,
+        text: telegramText,
+        parse_mode: 'HTML',
+        disable_web_page_preview: true,
+      }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+    const tgData: any = await tgRes.json().catch(() => ({}));
+
+    if (!tgRes.ok || !tgData.ok) {
+      const desc = tgData?.description || `HTTP ${tgRes.status}`;
+      res.status(400).json({
+        success: false,
+        error: `تعذر الإرسال عبر Telegram API (${desc}). تأكد من صحة Bot Token و Chat ID وأنك قمت بالضغط على /start داخل البوت.`,
+      });
+      return;
+    }
+
+    res.json({
+      success: true,
+      messageId: tgData.result?.message_id,
+      chatId: cleanChatId,
+      message: isTest
+        ? `تم إرسال إشعار الاختبار بنجاح إلى تلجرام (Chat ID: ${cleanChatId}).`
+        : `تم إرسال تنبيه تلجرام الفوري بنجاح.`,
+    });
+  } catch (error: any) {
+    console.error('Telegram dispatch error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'حدث خطأ أثناء الاتصال بخوادم تلجرام.',
+    });
+  }
+});
+
+
 async function startServer() {
   const isProd = process.env.NODE_ENV === 'production';
   const distIndex = path.resolve(__dirname, 'dist', 'index.html');
@@ -279,7 +403,14 @@ async function startServer() {
       res.json({
         status: 'online',
         service: 'ShadX-Provider Backend API (Render)',
-        endpoints: ['/api/health', '/api/proxy/products', '/api/proxy/profile', '/api/proxy/test-order', '/api/notifications/send-email'],
+        endpoints: [
+          '/api/health',
+          '/api/proxy/products',
+          '/api/proxy/profile',
+          '/api/proxy/test-order',
+          '/api/notifications/send-email',
+          '/api/notifications/send-telegram',
+        ],
       });
     });
   }

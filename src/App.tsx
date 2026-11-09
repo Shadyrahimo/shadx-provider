@@ -140,22 +140,46 @@ export default function App() {
     secondsRemaining: 15 * 60,
   });
 
-  // Status & Price Alert Rule Config (clean — no fake product IDs)
-  const [alertRuleConfig, setAlertRuleConfig] = useState<AlertRuleConfig>({
-    trackAvailabilityChanges: true,
-    trackPriceChanges: true,
-    priceChangeThresholdPercent: 5,
-    customProductPercentages: {},
-    enabledProductAlertIds: [],
-    trackThresholdBreaches: true,
-    notifyOnCostDrop: true,
-    notifyOnCostHike: true,
-    playSound: true,
-    emailNotificationsEnabled: false,
-    recipientEmail: '',
-    emailOnHighProfitOnly: true,
-    emailPriceChangeThresholdPercent: 10,
+  // Status & Price Alert Rule Config (persisted in localStorage, clean — no fake product IDs)
+  const [alertRuleConfig, setAlertRuleConfig] = useState<AlertRuleConfig>(() => {
+    const defaults: AlertRuleConfig = {
+      trackAvailabilityChanges: true,
+      trackPriceChanges: true,
+      priceChangeThresholdPercent: 5,
+      customProductPercentages: {},
+      enabledProductAlertIds: [],
+      trackThresholdBreaches: true,
+      notifyOnCostDrop: true,
+      notifyOnCostHike: true,
+      playSound: true,
+      emailNotificationsEnabled: false,
+      recipientEmail: '',
+      emailOnHighProfitOnly: true,
+      emailPriceChangeThresholdPercent: 10,
+      telegramNotificationsEnabled: false,
+      telegramBotToken: '',
+      telegramChatId: '',
+      telegramNotifyOnCostDrop: true,
+      telegramNotifyOnNewOrAvailableProducts: true,
+    };
+    try {
+      const saved = localStorage.getItem('shadx_alert_rules');
+      if (saved) {
+        return { ...defaults, ...JSON.parse(saved) };
+      }
+    } catch {
+      // Fallback to defaults
+    }
+    return defaults;
   });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('shadx_alert_rules', JSON.stringify(alertRuleConfig));
+    } catch {
+      // Ignore storage quota errors
+    }
+  }, [alertRuleConfig]);
 
   // Alert Log History (clean — only populated by real provider status/price changes)
   const [alerts, setAlerts] = useState<AppAlertItem[]>([]);
@@ -275,12 +299,45 @@ export default function App() {
     }
   };
 
+  // Helper to dispatch instant Telegram Bot notifications
+  const dispatchTelegramAlert = (payload: {
+    title: string;
+    productName: string;
+    productId: string | number;
+    category: string;
+    message: string;
+    oldValue?: string | number | boolean;
+    newValue?: string | number | boolean;
+    changePercent?: number;
+    eventType: 'price_drop' | 'threshold_breach' | 'new_product' | 'availability_back';
+  }) => {
+    if (
+      !alertRuleConfig.telegramNotificationsEnabled ||
+      !alertRuleConfig.telegramBotToken?.trim() ||
+      !alertRuleConfig.telegramChatId?.trim()
+    ) {
+      return;
+    }
+
+    fetch(buildBackendUrl('/api/notifications/send-telegram'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        botToken: alertRuleConfig.telegramBotToken,
+        chatId: alertRuleConfig.telegramChatId,
+        ...payload,
+        isTest: false,
+      }),
+    }).catch((err) => console.warn('Telegram notification dispatch failed:', err));
+  };
+
   // Core Alert Detection Function: compares old product snapshots with new states
   const detectAndGenerateAlerts = (
     newProducts: RawProviderProduct[],
     sourceLabel: string = 'المزود'
   ) => {
     const prevMap = previousProductsRef.current;
+    const hadPreviousSnapshot = prevMap.size > 0;
     const newAlerts: AppAlertItem[] = [];
     const now = new Date();
     const timeFormatted = now.toLocaleTimeString('ar-SA', {
@@ -289,10 +346,66 @@ export default function App() {
       second: '2-digit',
     });
 
+    const isTelegramReady =
+      Boolean(alertRuleConfig.telegramNotificationsEnabled) &&
+      Boolean(alertRuleConfig.telegramBotToken?.trim()) &&
+      Boolean(alertRuleConfig.telegramChatId?.trim());
+
     newProducts.forEach((newProd) => {
+      const newCost =
+        typeof newProd.price === 'number'
+          ? newProd.price
+          : parseFloat(String(newProd.price)) || 0;
+      const newAvail =
+        newProd.available === true ||
+        newProd.available === 1 ||
+        newProd.available === '1' ||
+        newProd.available === 'true';
+
       const oldProd = prevMap.get(newProd.id);
+
+      // 0. Brand New Product Detected in Catalog (after initial sync)
       if (!oldProd) {
         prevMap.set(newProd.id, { ...newProd });
+
+        if (hadPreviousSnapshot && newAvail && alertRuleConfig.trackAvailabilityChanges) {
+          const shouldSendTgNew =
+            isTelegramReady && (alertRuleConfig.telegramNotifyOnNewOrAvailableProducts ?? true);
+
+          const alertTitle = 'توفر منتج جديد في كتالوج المزود';
+          const alertMsg = `تم رصد إضافة منتج جديد متاح للطلب الفوري من (${sourceLabel}) بتكلفة $${newCost.toFixed(3)}.`;
+
+          if (shouldSendTgNew) {
+            dispatchTelegramAlert({
+              title: alertTitle,
+              productName: newProd.name,
+              productId: newProd.id,
+              category: newProd.category_name || 'عام',
+              message: alertMsg,
+              oldValue: 'غير مدرج سابقاً',
+              newValue: `متوفر ($${newCost.toFixed(3)})`,
+              eventType: 'new_product',
+            });
+          }
+
+          newAlerts.push({
+            id: `alert-new-prod-${newProd.id}-${Date.now()}-${Math.random()}`,
+            timestamp: timeFormatted,
+            dateObj: now.toISOString(),
+            productId: newProd.id,
+            productName: newProd.name,
+            category: newProd.category_name || 'عام',
+            type: 'new_product',
+            severity: 'success',
+            title: alertTitle,
+            message: alertMsg,
+            oldValue: 'جديد',
+            newValue: `$${newCost.toFixed(3)}`,
+            isRead: false,
+            telegramSent: shouldSendTgNew,
+            telegramChatId: shouldSendTgNew ? alertRuleConfig.telegramChatId : undefined,
+          });
+        }
         return;
       }
 
@@ -300,21 +413,12 @@ export default function App() {
         typeof oldProd.price === 'number'
           ? oldProd.price
           : parseFloat(String(oldProd.price)) || 0;
-      const newCost =
-        typeof newProd.price === 'number'
-          ? newProd.price
-          : parseFloat(String(newProd.price)) || 0;
 
       const oldAvail =
         oldProd.available === true ||
         oldProd.available === 1 ||
         oldProd.available === '1' ||
         oldProd.available === 'true';
-      const newAvail =
-        newProd.available === true ||
-        newProd.available === 1 ||
-        newProd.available === '1' ||
-        newProd.available === 'true';
 
       // 1. Availability Status Changed
       if (alertRuleConfig.trackAvailabilityChanges && oldAvail !== newAvail) {
@@ -335,6 +439,24 @@ export default function App() {
             isRead: false,
           });
         } else {
+          const shouldSendTgAvail =
+            isTelegramReady && (alertRuleConfig.telegramNotifyOnNewOrAvailableProducts ?? true);
+          const alertTitle = 'عودة المنتج للتوفر والطلب الفوري';
+          const alertMsg = `أصبح المنتج متاحاً وجاهزاً للطلب الفوري وتنفيذ طلبات العملاء (${sourceLabel}) بتكلفة $${newCost.toFixed(3)}.`;
+
+          if (shouldSendTgAvail) {
+            dispatchTelegramAlert({
+              title: alertTitle,
+              productName: newProd.name,
+              productId: newProd.id,
+              category: newProd.category_name || 'عام',
+              message: alertMsg,
+              oldValue: 'غير متوفر',
+              newValue: `متاح للطلب ($${newCost.toFixed(3)})`,
+              eventType: 'availability_back',
+            });
+          }
+
           newAlerts.push({
             id: `alert-avail-back-${newProd.id}-${Date.now()}-${Math.random()}`,
             timestamp: timeFormatted,
@@ -344,11 +466,13 @@ export default function App() {
             category: newProd.category_name || 'عام',
             type: 'availability_back',
             severity: 'success',
-            title: 'عودة المنتج للتوفر والطلب الفوري',
-            message: `أصبح المنتج متاحاً وجاهزاً للطلب الفوري وتنفيذ طلبات العملاء (${sourceLabel}).`,
+            title: alertTitle,
+            message: alertMsg,
             oldValue: 'غير متوفر',
             newValue: 'متاح للطلب',
             isRead: false,
+            telegramSent: shouldSendTgAvail,
+            telegramChatId: shouldSendTgAvail ? alertRuleConfig.telegramChatId : undefined,
           });
         }
       }
@@ -384,7 +508,6 @@ export default function App() {
             Math.abs(percentChange) >= alertRuleConfig.emailPriceChangeThresholdPercent;
 
           if (shouldSendEmail) {
-            // Asynchronously dispatch notification email via backend integration
             fetch(buildBackendUrl('/api/notifications/send-email'), {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -408,6 +531,25 @@ export default function App() {
             : '';
 
           if (percentChange < 0 && alertRuleConfig.notifyOnCostDrop) {
+            const shouldSendTgDrop =
+              isTelegramReady && (alertRuleConfig.telegramNotifyOnCostDrop ?? true);
+            const dropTitle = `انخفاض سعر التكلفة بنسبة ${Math.abs(percentChange)}%${customNote}`;
+            const dropMsg = `انخفضت التكلفة من $${oldCost.toFixed(3)} إلى $${newCost.toFixed(3)} (وفر: $${Math.abs(diff).toFixed(3)}). ينصح بمراجعة هوامشك لزيادة الأرباح!`;
+
+            if (shouldSendTgDrop) {
+              dispatchTelegramAlert({
+                title: dropTitle,
+                productName: newProd.name,
+                productId: newProd.id,
+                category: newProd.category_name || 'عام',
+                message: dropMsg,
+                oldValue: `$${oldCost.toFixed(3)}`,
+                newValue: `$${newCost.toFixed(3)}`,
+                changePercent: percentChange,
+                eventType: 'price_drop',
+              });
+            }
+
             newAlerts.push({
               id: `alert-price-drop-${newProd.id}-${Date.now()}-${Math.random()}`,
               timestamp: timeFormatted,
@@ -417,14 +559,16 @@ export default function App() {
               category: newProd.category_name || 'عام',
               type: 'price_drop',
               severity: 'success',
-              title: `انخفاض سعر التكلفة بنسبة ${Math.abs(percentChange)}%${customNote}`,
-              message: `انخفضت التكلفة من $${oldCost.toFixed(3)} إلى $${newCost.toFixed(3)} (وفر: $${Math.abs(diff).toFixed(3)}). ينصح بمراجعة هوامشك لزيادة الأرباح!`,
+              title: dropTitle,
+              message: dropMsg,
               oldValue: `$${oldCost.toFixed(3)}`,
               newValue: `$${newCost.toFixed(3)}`,
               changePercent: percentChange,
               isRead: false,
               emailSent: shouldSendEmail,
               emailRecipient: shouldSendEmail ? alertRuleConfig.recipientEmail : undefined,
+              telegramSent: shouldSendTgDrop,
+              telegramChatId: shouldSendTgDrop ? alertRuleConfig.telegramChatId : undefined,
               isHighProfit,
               customPercentageThreshold: isCustomTracked ? effectiveThresholdPercent : undefined,
             });
@@ -466,6 +610,24 @@ export default function App() {
           newCost < targetThreshold &&
           (oldCost >= targetThreshold || oldCost === 0)
         ) {
+          const shouldSendTgThreshold =
+            isTelegramReady && (alertRuleConfig.telegramNotifyOnCostDrop ?? true);
+          const threshTitle = `كسر حد التكلفة المستهدف ($${targetThreshold})`;
+          const threshMsg = `انخفضت التكلفة الجديدة ($${newCost.toFixed(2)}) دون الحد المالي المحدد، بتوفير قدره $${(targetThreshold - newCost).toFixed(2)}!`;
+
+          if (shouldSendTgThreshold) {
+            dispatchTelegramAlert({
+              title: threshTitle,
+              productName: newProd.name,
+              productId: newProd.id,
+              category: newProd.category_name || 'عام',
+              message: threshMsg,
+              oldValue: `الحد: $${targetThreshold}`,
+              newValue: `الجديد: $${newCost.toFixed(2)}`,
+              eventType: 'threshold_breach',
+            });
+          }
+
           newAlerts.push({
             id: `alert-threshold-${newProd.id}-${Date.now()}-${Math.random()}`,
             timestamp: timeFormatted,
@@ -475,11 +637,13 @@ export default function App() {
             category: newProd.category_name || 'عام',
             type: 'threshold_breach',
             severity: 'warning',
-            title: `كسر حد التكلفة المستهدف ($${targetThreshold})`,
-            message: `انخفضت التكلفة الجديدة ($${newCost.toFixed(2)}) دون الحد المالي المحدد، بتوفير قدره $${(targetThreshold - newCost).toFixed(2)}!`,
+            title: threshTitle,
+            message: threshMsg,
             oldValue: `الحد: $${targetThreshold}`,
             newValue: `الجديد: $${newCost.toFixed(2)}`,
             isRead: false,
+            telegramSent: shouldSendTgThreshold,
+            telegramChatId: shouldSendTgThreshold ? alertRuleConfig.telegramChatId : undefined,
           });
         }
       }
