@@ -20,6 +20,7 @@ interface ThresholdConfigModalProps {
   onSave: (newConfig: PriceThresholdConfig) => void;
   products: CatalogProduct[];
   onSimulateCostDrop?: (productId: string | number, newLowerCost: number) => void;
+  inline?: boolean;
 }
 
 export const ThresholdConfigModal: React.FC<ThresholdConfigModalProps> = ({
@@ -28,7 +29,7 @@ export const ThresholdConfigModal: React.FC<ThresholdConfigModalProps> = ({
   thresholdConfig,
   onSave,
   products,
-  onSimulateCostDrop,
+  inline = false,
 }) => {
   const [enabled, setEnabled] = useState<boolean>(thresholdConfig.enabled);
   const [defaultThreshold, setDefaultThreshold] = useState<number | ''>(
@@ -42,7 +43,7 @@ export const ThresholdConfigModal: React.FC<ThresholdConfigModalProps> = ({
   const [selectedProductId, setSelectedProductId] = useState<string | number>('');
   const [customPriceInput, setCustomPriceInput] = useState<string>('');
 
-  if (!isOpen) return null;
+  if (!isOpen && !inline) return null;
 
   const handleApply = () => {
     onSave({
@@ -50,7 +51,7 @@ export const ThresholdConfigModal: React.FC<ThresholdConfigModalProps> = ({
       defaultThreshold: defaultThreshold === '' ? '' : Number(defaultThreshold),
       productThresholds,
     });
-    onClose();
+    if (!inline) onClose();
   };
 
   const handleAddProductThreshold = () => {
@@ -80,43 +81,38 @@ export const ThresholdConfigModal: React.FC<ThresholdConfigModalProps> = ({
     )
     .slice(0, 6);
 
-  // Quick simulation helper
-  const handleQuickSimulate = () => {
-    if (products.length > 0 && onSimulateCostDrop) {
-      // Find a product like PUBG 60 UC or first item
-      const target = products.find((p) => p.name.includes('60') || p.name.includes('UC')) || products[0];
-      const newDrop = Number((target.costPriceUsd * 0.45).toFixed(3)); // 55% price drop
-      // Also ensure threshold is above this new drop
-      setProductThresholds((prev) => ({
-        ...prev,
-        [target.id]: target.costPriceUsd,
-      }));
-      setEnabled(true);
-      onSimulateCostDrop(target.id, newDrop);
-    }
-  };
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-sm overflow-y-auto">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative my-8">
-        <button
-          onClick={onClose}
-          className="absolute top-4 left-4 p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-        >
-          <X className="w-5 h-5" />
-        </button>
+    <div
+      className={
+        inline
+          ? 'w-full'
+          : 'fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-sm overflow-y-auto'
+      }
+    >
+      <div
+        className={
+          inline
+            ? 'bg-slate-900 border border-slate-800 rounded-2xl w-full p-5 sm:p-6 shadow-sm relative'
+            : 'bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative my-8'
+        }
+      >
+        {!inline && (
+          <button
+            onClick={onClose}
+            className="absolute top-4 left-4 p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        )}
 
         {/* Modal Header */}
         <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-800">
-          <div className="w-11 h-11 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center justify-center">
+          <div className="w-11 h-11 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center justify-center shrink-0">
             <BellRing className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="text-base font-bold text-white flex items-center gap-2">
-              <span>إعداد الحد السعري وتنبيهات انخفاض التكلفة (Threshold Alerts)</span>
-              <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded font-mono">
-                Price Drop Alert
-              </span>
+            <h3 className="text-base font-bold text-white flex flex-wrap items-center gap-2">
+              <span>إعداد الحد السعري وتنبيهات انخفاض التكلفة</span>
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
               تحديد سقف سعر مستهدف، وإظهار تنبيه بصري بارز في الجدول فور انخفاض سعر تكلفة المنتج عن هذا الحد

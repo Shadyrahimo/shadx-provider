@@ -42,6 +42,7 @@ interface AlertsDrawerProps {
   onSimulateProviderChanges: () => void;
   onSelectProduct: (product: CatalogProduct) => void;
   productsMap: Map<string | number, CatalogProduct>;
+  inline?: boolean;
 }
 
 export const AlertsDrawer: React.FC<AlertsDrawerProps> = ({
@@ -57,11 +58,12 @@ export const AlertsDrawer: React.FC<AlertsDrawerProps> = ({
   onSimulateProviderChanges,
   onSelectProduct,
   productsMap,
+  inline = false,
 }) => {
-  if (!isOpen) return null;
+  if (!isOpen && !inline) return null;
 
   const [activeTab, setActiveTab] = useState<'all' | 'unread' | 'price' | 'availability' | 'threshold'>('all');
-  const [showConfig, setShowConfig] = useState<boolean>(false);
+  const [showConfig, setShowConfig] = useState<boolean>(inline);
   const [isSendingTestEmail, setIsSendingTestEmail] = useState<boolean>(false);
   const [testEmailStatus, setTestEmailStatus] = useState<string | null>(null);
   const [selectedProductIdToAdd, setSelectedProductIdToAdd] = useState<string | number | ''>('');
@@ -192,20 +194,39 @@ export const AlertsDrawer: React.FC<AlertsDrawerProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden bg-slate-950/80 backdrop-blur-sm transition-opacity" dir="rtl">
-      <div className="absolute inset-0" onClick={onClose} />
+    <div
+      className={
+        inline
+          ? 'w-full'
+          : 'fixed inset-0 z-50 overflow-hidden bg-slate-950/80 backdrop-blur-sm transition-opacity'
+      }
+      dir="rtl"
+    >
+      {!inline && <div className="absolute inset-0" onClick={onClose} />}
 
-      <div className="fixed inset-y-0 left-0 max-w-full flex pl-0 sm:pl-10">
-        <div className="w-screen max-w-xl bg-slate-900 border-r border-slate-800 shadow-2xl flex flex-col z-10">
+      <div
+        className={
+          inline
+            ? 'w-full'
+            : 'fixed inset-y-0 left-0 max-w-full flex pl-0 sm:pl-10'
+        }
+      >
+        <div
+          className={
+            inline
+              ? 'w-full bg-slate-900 border border-slate-800 rounded-2xl shadow-sm flex flex-col overflow-hidden'
+              : 'w-screen max-w-xl bg-slate-900 border-r border-slate-800 shadow-2xl flex flex-col z-10'
+          }
+        >
           {/* Header */}
-          <div className="p-4 sm:p-5 border-b border-slate-800 bg-slate-900/95 sticky top-0 z-20">
+          <div className="p-4 sm:p-5 border-b border-slate-800 bg-slate-900/95">
             <div className="flex items-center justify-between gap-3 mb-3">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shadow-inner">
+                <div className="w-9 h-9 rounded-xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shrink-0">
                   <BellRing className="w-5 h-5" />
                 </div>
                 <div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <h3 className="text-base font-bold text-white">سجل ومركز التنبيهات الذكي</h3>
                     {unreadCount > 0 && (
                       <span className="bg-amber-500 text-slate-950 text-xs font-bold px-2 py-0.5 rounded-full font-mono-numbers">
@@ -219,13 +240,15 @@ export const AlertsDrawer: React.FC<AlertsDrawerProps> = ({
                 </div>
               </div>
 
-              <button
-                onClick={onClose}
-                className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors"
-                title="إغلاق النافذة"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              {!inline && (
+                <button
+                  onClick={onClose}
+                  className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors"
+                  title="إغلاق النافذة"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              )}
             </div>
 
             {/* Quick Actions Bar */}

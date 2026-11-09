@@ -8,6 +8,7 @@ interface MarginConfigModalProps {
   onClose: () => void;
   config: MarginConfig;
   onSave: (newConfig: MarginConfig) => void;
+  inline?: boolean;
 }
 
 export const MarginConfigModal: React.FC<MarginConfigModalProps> = ({
@@ -15,12 +16,13 @@ export const MarginConfigModal: React.FC<MarginConfigModalProps> = ({
   onClose,
   config,
   onSave,
+  inline = false,
 }) => {
   const [mode, setMode] = useState<'percentage' | 'fixed'>(config.mode);
   const [value, setValue] = useState<number>(config.value);
   const [rounding, setRounding] = useState<MarginConfig['rounding']>(config.rounding);
 
-  if (!isOpen) return null;
+  if (!isOpen && !inline) return null;
 
   const handleApply = () => {
     onSave({
@@ -28,23 +30,37 @@ export const MarginConfigModal: React.FC<MarginConfigModalProps> = ({
       value: Number(value) || 0,
       rounding,
     });
-    onClose();
+    if (!inline) onClose();
   };
 
   const previewExamples = [0.88, 4.39, 14.50, 48.90];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl relative">
-        <button
-          onClick={onClose}
-          className="absolute top-4 left-4 p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-        >
-          <X className="w-5 h-5" />
-        </button>
+    <div
+      className={
+        inline
+          ? 'w-full'
+          : 'fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm overflow-y-auto'
+      }
+    >
+      <div
+        className={
+          inline
+            ? 'bg-slate-900 border border-slate-800 rounded-2xl w-full p-5 sm:p-6 shadow-sm relative'
+            : 'bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl relative my-8'
+        }
+      >
+        {!inline && (
+          <button
+            onClick={onClose}
+            className="absolute top-4 left-4 p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        )}
 
         <div className="flex items-center gap-2.5 mb-5">
-          <div className="w-10 h-10 rounded-xl bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-xl bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center shrink-0">
             <Sliders className="w-5 h-5" />
           </div>
           <div>
@@ -63,7 +79,7 @@ export const MarginConfigModal: React.FC<MarginConfigModalProps> = ({
             <label className="block text-slate-300 font-semibold mb-2">
               نوع حساب هامش الربح:
             </label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={() => setMode('percentage')}
@@ -112,7 +128,7 @@ export const MarginConfigModal: React.FC<MarginConfigModalProps> = ({
             </div>
 
             {/* Quick Presets */}
-            <div className="flex items-center gap-1.5 mt-2">
+            <div className="flex flex-wrap items-center gap-1.5 mt-2">
               <span className="text-[11px] text-slate-500">خيارات سريعة:</span>
               {mode === 'percentage'
                 ? [10, 15, 20, 25, 30].map((p) => (
@@ -176,7 +192,7 @@ export const MarginConfigModal: React.FC<MarginConfigModalProps> = ({
             <div className="text-[11px] font-semibold text-slate-400 mb-2">
               معاينة حية لتأثير الهامش:
             </div>
-            <div className="grid grid-cols-4 gap-2 text-center">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
               {previewExamples.map((cost) => {
                 const sell = calculateSuggestedPrice(cost, { mode, value, rounding });
                 const profit = sell - cost;
@@ -198,19 +214,21 @@ export const MarginConfigModal: React.FC<MarginConfigModalProps> = ({
 
         {/* Action Buttons */}
         <div className="flex items-center justify-end gap-2.5 mt-6 pt-4 border-t border-slate-800">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 text-xs font-medium transition-colors"
-          >
-            إلغاء
-          </button>
+          {!inline && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 text-xs font-medium transition-colors"
+            >
+              إلغاء
+            </button>
+          )}
           <button
             type="button"
             onClick={handleApply}
             className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition-colors shadow-md shadow-indigo-600/20"
           >
-            تطبيق الهامش على الكتالوج
+            تطبيق وحفظ الهامش على الكتالوج
           </button>
         </div>
       </div>

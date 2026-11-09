@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { Header } from './components/Header';
+import { Sidebar, ActiveSectionId } from './components/Sidebar';
 import { FilterBar } from './components/FilterBar';
 import { ProductTable } from './components/ProductTable';
 import { MarginConfigModal } from './components/MarginConfigModal';
@@ -44,6 +45,9 @@ import {
   BellRing,
   Zap,
   PieChart as PieChartIcon,
+  Globe,
+  KeyRound,
+  RefreshCw,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -108,6 +112,11 @@ export default function App() {
   // Bulk selection
   const [selectedIds, setSelectedIds] = useState<Set<string | number>>(new Set());
   const [isCopiedIds, setIsCopiedIds] = useState<boolean>(false);
+
+  // Active Sidebar Section & Mobile Drawer state
+  const [activeSection, setActiveSection] = useState<ActiveSectionId>('catalog');
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false);
+  const [showConnectionToken, setShowConnectionToken] = useState<boolean>(false);
 
   // Modals & Drawers
   const [activeModalProduct, setActiveModalProduct] = useState<CatalogProduct | null>(null);
@@ -968,442 +977,632 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
-      {/* Top Header & Connection Bar */}
-      <Header
-        selectedPreset={selectedPreset}
-        onSelectPreset={handleSelectPreset}
-        baseUrl={baseUrl}
-        setBaseUrl={setBaseUrl}
-        apiToken={apiToken}
-        setApiToken={setApiToken}
-        onFetchProducts={handleFetchProducts}
-        isLoading={isLoading}
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex font-sans" dir="rtl">
+      {/* Responsive Sidebar Navigation (Desktop Sticky + Mobile Drawer + Mobile Bottom Bar) */}
+      <Sidebar
+        activeSection={activeSection}
+        onSelectSection={setActiveSection}
+        isOpenMobile={isMobileSidebarOpen}
+        onCloseMobile={() => setIsMobileSidebarOpen(false)}
+        totalProductsCount={catalogProducts.length}
+        unreadAlertsCount={unreadAlertsCount}
+        alertProductsCount={alertProductsCount}
         isLiveConnected={isLiveConnected}
         userBalance={userBalance}
-        userEmail={userEmail}
         marginConfig={marginConfig}
-        onOpenMarginModal={() => setIsMarginModalOpen(true)}
-        onOpenDocsDrawer={() => setIsDocsDrawerOpen(true)}
-        totalProductsCount={catalogProducts.length}
-        thresholdConfig={thresholdConfig}
-        alertProductsCount={alertProductsCount}
-        onOpenThresholdModal={() => setIsThresholdModalOpen(true)}
-        unreadAlertsCount={unreadAlertsCount}
-        onOpenAlertsCenter={() => setIsAlertsDrawerOpen(true)}
         syncConfig={syncConfig}
-        onOpenSyncModal={() => setIsSyncModalOpen(true)}
         onTriggerSyncNow={handleTriggerManualSync}
-        onOpenDeploymentGuide={() => setIsDeploymentModalOpen(true)}
       />
 
-      {/* Main Viewport */}
-      <main className="grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-5">
-        {/* Floating Notification */}
-        {notification && (
-          <div
-            className={`mb-4 p-3 rounded-xl border flex items-center justify-between text-xs transition-all ${
-              notification.type === 'success'
-                ? 'bg-emerald-950/70 border-emerald-500/30 text-emerald-300'
-                : notification.type === 'error'
-                ? 'bg-rose-950/70 border-rose-500/30 text-rose-300'
-                : 'bg-indigo-950/70 border-indigo-500/30 text-indigo-300'
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              {notification.type === 'success' ? (
-                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
-              ) : notification.type === 'error' ? (
-                <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
-              ) : (
-                <Sparkles className="w-4 h-4 shrink-0 text-indigo-400" />
-              )}
-              <span>{notification.text}</span>
-            </div>
-            <button
-              onClick={() => setNotification(null)}
-              className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        )}
-
-        {/* Quick KPI Strip with Threshold Alert and Alerts Center card */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-4 text-xs">
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 flex items-center justify-center">
-              <Package className="w-4 h-4" />
-            </div>
-            <div>
-              <span className="text-slate-400 block text-[11px]">إجمالي المنتجات</span>
-              <span className="text-sm font-bold font-mono-numbers text-white">
-                {catalogProducts.length}
-              </span>
-            </div>
-          </div>
-
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center">
-              <CheckCircle2 className="w-4 h-4" />
-            </div>
-            <div>
-              <span className="text-slate-400 block text-[11px]">منتجات متوفرة للطلب</span>
-              <span className="text-sm font-bold font-mono-numbers text-emerald-400">
-                {availableCount}
-              </span>
-            </div>
-          </div>
-
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center justify-center">
-              <Layers className="w-4 h-4" />
-            </div>
-            <div>
-              <span className="text-slate-400 block text-[11px]">التصنيفات المتاحة</span>
-              <span className="text-sm font-bold font-mono-numbers text-amber-300">
-                {categoriesWithCounts.length} فئة
-              </span>
-            </div>
-          </div>
-
-          {/* Threshold Price Drop Alert Card */}
-          <div
-            onClick={() =>
-              setFilters((prev) => ({
-                ...prev,
-                onlyThresholdAlerts: !prev.onlyThresholdAlerts,
-              }))
-            }
-            className={`border rounded-xl p-3 flex items-center gap-3 cursor-pointer transition-all ${
-              alertProductsCount > 0
-                ? 'bg-amber-950/30 border-amber-500/40 hover:bg-amber-950/50'
-                : 'bg-slate-900 border-slate-800 hover:bg-slate-800/80'
-            }`}
-            title="انقر لتصفية المنتجات التي تقل تكلفتها عن الحد المحدد"
-          >
-            <div
-              className={`w-9 h-9 rounded-lg flex items-center justify-center ${
-                alertProductsCount > 0
-                  ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40 animate-pulse'
-                  : 'bg-slate-800 text-slate-400 border border-slate-700'
-              }`}
-            >
-              <BellRing className="w-4 h-4" />
-            </div>
-            <div>
-              <span className="text-slate-400 block text-[11px]">تنبيهات انخفاض التكلفة</span>
-              <div className="flex items-center gap-1.5">
-                <span
-                  className={`text-sm font-bold font-mono-numbers ${
-                    alertProductsCount > 0 ? 'text-amber-300' : 'text-slate-400'
-                  }`}
-                >
-                  {alertProductsCount} منتج
-                </span>
-                {filters.onlyThresholdAlerts && (
-                  <span className="text-[10px] bg-amber-500 text-slate-950 px-1 rounded font-bold">
-                    مفلتر
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Status & Price Alerts Center Card */}
-          <div
-            onClick={() => setIsAlertsDrawerOpen(true)}
-            className={`border rounded-xl p-3 flex items-center gap-3 cursor-pointer transition-all ${
-              unreadAlertsCount > 0
-                ? 'bg-indigo-950/40 border-indigo-500/50 hover:bg-indigo-950/60 shadow-sm shadow-indigo-500/10'
-                : 'bg-slate-900 border-slate-800 hover:bg-slate-800/80'
-            }`}
-            title="انقر لفتح سجل ومركز التنبيهات المباشرة"
-          >
-            <div
-              className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
-                unreadAlertsCount > 0
-                  ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/40 animate-pulse'
-                  : 'bg-slate-800 text-slate-400 border border-slate-700'
-              }`}
-            >
-              <Bell className="w-4 h-4" />
-            </div>
-            <div>
-              <span className="text-slate-400 block text-[11px]">سجل التنبيهات الذكي</span>
-              <div className="flex items-center gap-1.5">
-                <span
-                  className={`text-sm font-bold font-mono-numbers ${
-                    unreadAlertsCount > 0 ? 'text-indigo-300' : 'text-slate-400'
-                  }`}
-                >
-                  {unreadAlertsCount > 0 ? `${unreadAlertsCount} جديد` : `${alerts.length} تنبيه`}
-                </span>
-                {unreadAlertsCount > 0 && (
-                  <span className="text-[10px] bg-amber-500 text-slate-950 px-1 rounded font-bold">
-                    نشط
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-violet-500/10 text-violet-400 border border-violet-500/20 flex items-center justify-center">
-              <TrendingUp className="w-4 h-4" />
-            </div>
-            <div>
-              <span className="text-slate-400 block text-[11px]">هامش الربح النشط</span>
-              <span className="text-sm font-bold font-mono-numbers text-violet-300">
-                {marginConfig.mode === 'percentage' ? `+${marginConfig.value}%` : `+$${marginConfig.value}`}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Profitability Analytics & Donut Chart Card */}
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 mb-4 shadow-sm">
-          <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
-            {/* Title & Average Profit Margin Stats */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 grow">
-              <div className="w-12 h-12 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center shrink-0">
-                <PieChartIcon className="w-6 h-6" />
-              </div>
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <h3 className="text-xs font-bold text-white">
-                    تحليل هوامش الربحية للمنتجات المفلترة حالياً
-                  </h3>
-                  <span className="text-[10px] bg-slate-950 text-slate-300 border border-slate-800 px-2 py-0.5 rounded font-mono-numbers">
-                    {filteredProducts.length} منتج مفلتر
-                  </span>
-                </div>
-                <div className="flex flex-wrap items-baseline gap-3 text-xs font-mono-numbers">
-                  <div className="flex items-baseline gap-1.5">
-                    <span className="text-slate-400">متوسط هامش الربح المتوقع:</span>
-                    <span className="text-base font-bold text-emerald-400">
-                      +${profitAnalytics.avgProfitUsd.toFixed(2)}
-                    </span>
-                    <span className="text-xs font-semibold text-emerald-500/90">
-                      ({profitAnalytics.avgProfitPercent.toFixed(1)}%)
-                    </span>
-                  </div>
-                  <span className="text-slate-600 hidden sm:inline">·</span>
-                  <div className="flex items-baseline gap-1 text-slate-400 text-xs">
-                    <span>إجمالي الأرباح المتوقعة للكتالوج:</span>
-                    <span className="text-slate-200 font-bold text-xs">
-                      ${profitAnalytics.totalProfitPotential.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Donut Chart & Tier Breakdown */}
-            <div className="flex items-center gap-4 shrink-0 bg-slate-950/80 border border-slate-800/80 rounded-xl px-4 py-2 self-stretch sm:self-auto justify-between sm:justify-end">
-              {/* Donut Chart */}
-              <div className="w-24 h-20 relative flex items-center justify-center" dir="ltr">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <RechartsTooltip
-                      contentStyle={{
-                        backgroundColor: '#0f172a',
-                        borderColor: '#334155',
-                        borderRadius: '0.5rem',
-                        fontSize: '11px',
-                        color: '#f8fafc',
-                        direction: 'rtl',
-                        boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.5)',
-                      }}
-                      formatter={(value: any, name?: any) => [`${value} منتج`, name || 'العدد']}
-                    />
-                    <Pie
-                      data={profitAnalytics.distribution}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={25}
-                      outerRadius={38}
-                      paddingAngle={3}
-                      stroke="none"
-                    >
-                      {profitAnalytics.distribution.map((entry, index) => (
-                        <Cell key={`donut-cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                  </PieChart>
-                </ResponsiveContainer>
-                {/* Center label */}
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-[10px] font-bold text-slate-300 font-mono-numbers">
-                  {filteredProducts.length}
-                </div>
-              </div>
-
-              {/* Legend & Percentages */}
-              <div className="space-y-1 text-xs">
-                <div className="flex items-center justify-between gap-3 text-[11px]">
-                  <div className="flex items-center gap-1.5 text-slate-300">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
-                    <span>عالية (≥20%):</span>
-                  </div>
-                  <span className="font-bold text-emerald-400 font-mono-numbers">
-                    {profitAnalytics.counts.high} ({profitAnalytics.percentages.high}%)
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between gap-3 text-[11px]">
-                  <div className="flex items-center gap-1.5 text-slate-300">
-                    <span className="w-2 h-2 rounded-full bg-indigo-400 shrink-0" />
-                    <span>متوسطة (10-20%):</span>
-                  </div>
-                  <span className="font-bold text-indigo-400 font-mono-numbers">
-                    {profitAnalytics.counts.medium} ({profitAnalytics.percentages.medium}%)
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between gap-3 text-[11px]">
-                  <div className="flex items-center gap-1.5 text-slate-300">
-                    <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
-                    <span>منخفضة (&lt;10%):</span>
-                  </div>
-                  <span className="font-bold text-amber-400 font-mono-numbers">
-                    {profitAnalytics.counts.low} ({profitAnalytics.percentages.low}%)
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Smart Filters Bar (Item 11 & Export Tools) */}
-        <FilterBar
-          filters={filters}
-          setFilters={setFilters}
-          categories={categoriesWithCounts}
-          totalFilteredCount={filteredProducts.length}
+      {/* Main Content Column */}
+      <div className="flex-1 min-w-0 flex flex-col pb-16 lg:pb-0">
+        {/* Compact Responsive Top Header */}
+        <Header
+          activeSection={activeSection}
+          onSelectSection={setActiveSection}
+          onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
+          selectedPreset={selectedPreset}
+          onSelectPreset={handleSelectPreset}
+          baseUrl={baseUrl}
+          setBaseUrl={setBaseUrl}
+          apiToken={apiToken}
+          setApiToken={setApiToken}
+          onFetchProducts={handleFetchProducts}
+          isLoading={isLoading}
+          isLiveConnected={isLiveConnected}
+          userBalance={userBalance}
+          userEmail={userEmail}
+          marginConfig={marginConfig}
           totalProductsCount={catalogProducts.length}
-          onResetFilters={handleResetFilters}
-          selectedIds={selectedIds}
-          onExportCsv={handleExportCsv}
-          onExportJson={handleExportJson}
-          onCopySelectedIds={handleCopySelectedIds}
-          isCopiedIds={isCopiedIds}
-          onSelectAll={handleSelectAll}
-          isAllSelected={isAllSelected}
+          thresholdConfig={thresholdConfig}
           alertProductsCount={alertProductsCount}
+          unreadAlertsCount={unreadAlertsCount}
+          syncConfig={syncConfig}
         />
 
-        {/* Catalog Table (The 11 Columns) */}
-        <ProductTable
-          products={paginatedProducts}
-          totalProductsCount={catalogProducts.length}
-          selectedIds={selectedIds}
-          onToggleSelect={handleToggleSelect}
-          onOpenProductDetail={(prod, isFix) => {
-            setActiveModalProduct(prod);
-            setModalFixMode(Boolean(isFix));
-          }}
-          providerBaseUrl={baseUrl}
-        />
-
-        {/* Pagination & Density Controls */}
-        {filteredProducts.length > 0 && (
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 text-xs text-slate-400">
-            <div className="flex items-center gap-2">
-              <span>عرض</span>
-              <select
-                value={pageSize}
-                onChange={(e) => {
-                  setPageSize(Number(e.target.value));
-                  setCurrentPage(1);
-                }}
-                className="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-slate-200 focus:outline-none"
+        {/* Main Viewport */}
+        <main className="grow max-w-7xl w-full mx-auto px-3 sm:px-6 py-4 sm:py-6">
+          {/* Floating Notification */}
+          {notification && (
+            <div
+              className={`mb-4 p-3 rounded-xl border flex items-center justify-between text-xs transition-all ${
+                notification.type === 'success'
+                  ? 'bg-emerald-950/70 border-emerald-500/30 text-emerald-300'
+                  : notification.type === 'error'
+                  ? 'bg-rose-950/70 border-rose-500/30 text-rose-300'
+                  : 'bg-indigo-950/70 border-indigo-500/30 text-indigo-300'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                {notification.type === 'success' ? (
+                  <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+                ) : notification.type === 'error' ? (
+                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+                ) : (
+                  <Sparkles className="w-4 h-4 shrink-0 text-indigo-400" />
+                )}
+                <span>{notification.text}</span>
+              </div>
+              <button
+                onClick={() => setNotification(null)}
+                className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white"
               >
-                <option value={25}>25 منتج</option>
-                <option value={50}>50 منتج</option>
-                <option value={100}>100 منتج</option>
-                <option value={200}>200 منتج</option>
-                <option value={9999}>الكل دفعة واحدة</option>
-              </select>
-              <span>في الصفحة (الصفحة {currentPage} من {totalPages})</span>
+                <X className="w-3.5 h-3.5" />
+              </button>
             </div>
+          )}
 
-            {pageSize < 9999 && totalPages > 1 && (
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
-                  className="p-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-slate-300"
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </button>
+          {/* SECTION 1: CATALOG & PRODUCTS */}
+          {activeSection === 'catalog' && (
+            <div>
+              {/* Quick KPI Strip */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 mb-4 text-xs">
+                <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 flex items-center justify-center shrink-0">
+                    <Package className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <span className="text-slate-400 block text-[11px] truncate">إجمالي المنتجات</span>
+                    <span className="text-sm font-bold font-mono-numbers text-white">
+                      {catalogProducts.length}
+                    </span>
+                  </div>
+                </div>
 
-                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                  let pageNum = i + 1;
-                  if (totalPages > 5 && currentPage > 3) {
-                    pageNum = currentPage - 2 + i;
-                    if (pageNum > totalPages) pageNum = totalPages - 4 + i;
+                <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center shrink-0">
+                    <CheckCircle2 className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <span className="text-slate-400 block text-[11px] truncate">منتجات متوفرة</span>
+                    <span className="text-sm font-bold font-mono-numbers text-emerald-400">
+                      {availableCount}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center justify-center shrink-0">
+                    <Layers className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <span className="text-slate-400 block text-[11px] truncate">التصنيفات المتاحة</span>
+                    <span className="text-sm font-bold font-mono-numbers text-amber-300">
+                      {categoriesWithCounts.length} فئة
+                    </span>
+                  </div>
+                </div>
+
+                {/* Threshold Price Drop Alert Card */}
+                <div
+                  onClick={() =>
+                    setFilters((prev) => ({
+                      ...prev,
+                      onlyThresholdAlerts: !prev.onlyThresholdAlerts,
+                    }))
                   }
-                  return (
-                    <button
-                      key={pageNum}
-                      onClick={() => setCurrentPage(pageNum)}
-                      className={`w-7 h-7 rounded-lg text-xs font-mono font-medium transition-colors ${
-                        currentPage === pageNum
-                          ? 'bg-indigo-600 text-white'
-                          : 'bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-300'
+                  className={`border rounded-xl p-3 flex items-center gap-3 cursor-pointer transition-all ${
+                    alertProductsCount > 0
+                      ? 'bg-amber-950/30 border-amber-500/40 hover:bg-amber-950/50'
+                      : 'bg-slate-900 border-slate-800 hover:bg-slate-800/80'
+                  }`}
+                >
+                  <div
+                    className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+                      alertProductsCount > 0
+                        ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
+                        : 'bg-slate-800 text-slate-400 border border-slate-700'
+                    }`}
+                  >
+                    <BellRing className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <span className="text-slate-400 block text-[11px] truncate">انخفاض التكلفة</span>
+                    <span
+                      className={`text-sm font-bold font-mono-numbers ${
+                        alertProductsCount > 0 ? 'text-amber-300' : 'text-slate-400'
                       }`}
                     >
-                      {pageNum}
-                    </button>
-                  );
-                })}
+                      {alertProductsCount} منتج
+                    </span>
+                  </div>
+                </div>
 
-                <button
-                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={currentPage === totalPages}
-                  className="p-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-slate-300"
+                {/* Status & Price Alerts Center Card */}
+                <div
+                  onClick={() => setActiveSection('alerts')}
+                  className={`border rounded-xl p-3 flex items-center gap-3 cursor-pointer transition-all ${
+                    unreadAlertsCount > 0
+                      ? 'bg-indigo-950/40 border-indigo-500/50 hover:bg-indigo-950/60'
+                      : 'bg-slate-900 border-slate-800 hover:bg-slate-800/80'
+                  }`}
                 >
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
+                  <div
+                    className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+                      unreadAlertsCount > 0
+                        ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/40'
+                        : 'bg-slate-800 text-slate-400 border border-slate-700'
+                    }`}
+                  >
+                    <Bell className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <span className="text-slate-400 block text-[11px] truncate">سجل التنبيهات</span>
+                    <span
+                      className={`text-sm font-bold font-mono-numbers ${
+                        unreadAlertsCount > 0 ? 'text-indigo-300' : 'text-slate-400'
+                      }`}
+                    >
+                      {unreadAlertsCount > 0 ? `${unreadAlertsCount} جديد` : `${alerts.length} تنبيه`}
+                    </span>
+                  </div>
+                </div>
+
+                <div
+                  onClick={() => setActiveSection('pricing')}
+                  className="bg-slate-900 border border-slate-800 hover:bg-slate-800/80 rounded-xl p-3 flex items-center gap-3 cursor-pointer transition-colors"
+                >
+                  <div className="w-9 h-9 rounded-lg bg-violet-500/10 text-violet-400 border border-violet-500/20 flex items-center justify-center shrink-0">
+                    <TrendingUp className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <span className="text-slate-400 block text-[11px] truncate">هامش الربح النشط</span>
+                    <span className="text-sm font-bold font-mono-numbers text-violet-300">
+                      {marginConfig.mode === 'percentage' ? `+${marginConfig.value}%` : `+$${marginConfig.value}`}
+                    </span>
+                  </div>
+                </div>
               </div>
-            )}
-          </div>
-        )}
-      </main>
 
-      {/* Threshold Configuration Modal */}
-      <ThresholdConfigModal
-        isOpen={isThresholdModalOpen}
-        onClose={() => setIsThresholdModalOpen(false)}
-        thresholdConfig={thresholdConfig}
-        onSave={(newCfg) => {
-          setThresholdConfig(newCfg);
-          setNotification({
-            text: 'تم حفظ وتفعيل إعدادات الحدود السعرية وتنبيهات انخفاض التكلفة.',
-            type: 'success',
-          });
-        }}
-        products={catalogProducts}
-        onSimulateCostDrop={handleSimulateCostDrop}
-      />
+              {/* Profitability Analytics & Donut Chart Card */}
+              <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 mb-4 shadow-sm">
+                <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 grow">
+                    <div className="w-12 h-12 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center shrink-0">
+                      <PieChartIcon className="w-6 h-6" />
+                    </div>
+                    <div className="space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="text-xs font-bold text-white">
+                          تحليل هوامش الربحية للمنتجات المفلترة حالياً
+                        </h3>
+                        <span className="text-[11px] text-slate-400 font-mono-numbers">
+                          · {filteredProducts.length} منتج مفلتر
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap items-baseline gap-3 text-xs font-mono-numbers">
+                        <div className="flex items-baseline gap-1.5">
+                          <span className="text-slate-400">متوسط هامش الربح المتوقع:</span>
+                          <span className="text-base font-bold text-emerald-400">
+                            +${profitAnalytics.avgProfitUsd.toFixed(2)}
+                          </span>
+                          <span className="text-xs font-semibold text-emerald-500/90">
+                            ({profitAnalytics.avgProfitPercent.toFixed(1)}%)
+                          </span>
+                        </div>
+                        <span className="text-slate-600 hidden sm:inline">·</span>
+                        <div className="flex items-baseline gap-1 text-slate-400 text-xs">
+                          <span>إجمالي الأرباح المتوقعة للكتالوج:</span>
+                          <span className="text-slate-200 font-bold text-xs">
+                            ${profitAnalytics.totalProfitPotential.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
 
-      {/* Margin Configuration Modal */}
-      <MarginConfigModal
-        isOpen={isMarginModalOpen}
-        onClose={() => setIsMarginModalOpen(false)}
-        config={marginConfig}
-        onSave={(newCfg) => {
-          setMarginConfig(newCfg);
-          setNotification({
-            text: `تم تحديث هامش الربح (${newCfg.mode === 'percentage' ? `+${newCfg.value}%` : `+$${newCfg.value}`}) واحتساب سعر البيع المقترح لكافة المنتجات.`,
-            type: 'success',
-          });
-        }}
-      />
+                  {/* Donut Chart & Tier Breakdown */}
+                  <div className="flex items-center gap-4 shrink-0 bg-slate-950/80 border border-slate-800/80 rounded-xl px-4 py-2 self-stretch sm:self-auto justify-between sm:justify-end">
+                    <div className="w-24 h-20 relative flex items-center justify-center" dir="ltr">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <RechartsTooltip
+                            contentStyle={{
+                              backgroundColor: '#0f172a',
+                              borderColor: '#334155',
+                              borderRadius: '0.5rem',
+                              fontSize: '11px',
+                              color: '#f8fafc',
+                              direction: 'rtl',
+                            }}
+                            formatter={(value: any, name?: any) => [`${value} منتج`, name || 'العدد']}
+                          />
+                          <Pie
+                            data={profitAnalytics.distribution}
+                            dataKey="value"
+                            nameKey="name"
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={25}
+                            outerRadius={38}
+                            paddingAngle={3}
+                            stroke="none"
+                          >
+                            {profitAnalytics.distribution.map((entry, index) => (
+                              <Cell key={`donut-cell-${index}`} fill={entry.color} />
+                            ))}
+                          </Pie>
+                        </PieChart>
+                      </ResponsiveContainer>
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-[10px] font-bold text-slate-300 font-mono-numbers">
+                        {filteredProducts.length}
+                      </div>
+                    </div>
 
-      {/* Integration & Request Simulator Modal */}
+                    <div className="space-y-1 text-xs">
+                      <div className="flex items-center justify-between gap-3 text-[11px]">
+                        <div className="flex items-center gap-1.5 text-slate-300">
+                          <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
+                          <span>عالية (≥20%):</span>
+                        </div>
+                        <span className="font-bold text-emerald-400 font-mono-numbers">
+                          {profitAnalytics.counts.high} ({profitAnalytics.percentages.high}%)
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-3 text-[11px]">
+                        <div className="flex items-center gap-1.5 text-slate-300">
+                          <span className="w-2 h-2 rounded-full bg-indigo-400 shrink-0" />
+                          <span>متوسطة (10-20%):</span>
+                        </div>
+                        <span className="font-bold text-indigo-400 font-mono-numbers">
+                          {profitAnalytics.counts.medium} ({profitAnalytics.percentages.medium}%)
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-3 text-[11px]">
+                        <div className="flex items-center gap-1.5 text-slate-300">
+                          <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
+                          <span>منخفضة (&lt;10%):</span>
+                        </div>
+                        <span className="font-bold text-amber-400 font-mono-numbers">
+                          {profitAnalytics.counts.low} ({profitAnalytics.percentages.low}%)
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Smart Filters Bar */}
+              <FilterBar
+                filters={filters}
+                setFilters={setFilters}
+                categories={categoriesWithCounts}
+                totalFilteredCount={filteredProducts.length}
+                totalProductsCount={catalogProducts.length}
+                onResetFilters={handleResetFilters}
+                selectedIds={selectedIds}
+                onExportCsv={handleExportCsv}
+                onExportJson={handleExportJson}
+                onCopySelectedIds={handleCopySelectedIds}
+                isCopiedIds={isCopiedIds}
+                onSelectAll={handleSelectAll}
+                isAllSelected={isAllSelected}
+                alertProductsCount={alertProductsCount}
+              />
+
+              {/* Responsive Product Table & Cards */}
+              <ProductTable
+                products={paginatedProducts}
+                totalProductsCount={catalogProducts.length}
+                selectedIds={selectedIds}
+                onToggleSelect={handleToggleSelect}
+                onOpenProductDetail={(prod, isFix) => {
+                  setActiveModalProduct(prod);
+                  setModalFixMode(Boolean(isFix));
+                }}
+                providerBaseUrl={baseUrl}
+                onGoToConnection={() => setActiveSection('connection')}
+              />
+
+              {/* Pagination & Density Controls */}
+              {filteredProducts.length > 0 && (
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 text-xs text-slate-400">
+                  <div className="flex items-center gap-2">
+                    <span>عرض</span>
+                    <select
+                      value={pageSize}
+                      onChange={(e) => {
+                        setPageSize(Number(e.target.value));
+                        setCurrentPage(1);
+                      }}
+                      className="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-slate-200 focus:outline-none"
+                    >
+                      <option value={25}>25 منتج</option>
+                      <option value={50}>50 منتج</option>
+                      <option value={100}>100 منتج</option>
+                      <option value={200}>200 منتج</option>
+                      <option value={9999}>الكل دفعة واحدة</option>
+                    </select>
+                    <span>في الصفحة (الصفحة {currentPage} من {totalPages})</span>
+                  </div>
+
+                  {pageSize < 9999 && totalPages > 1 && (
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                        disabled={currentPage === 1}
+                        className="p-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-slate-300"
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+
+                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                        let pageNum = i + 1;
+                        if (totalPages > 5 && currentPage > 3) {
+                          pageNum = currentPage - 2 + i;
+                          if (pageNum > totalPages) pageNum = totalPages - 4 + i;
+                        }
+                        return (
+                          <button
+                            key={pageNum}
+                            onClick={() => setCurrentPage(pageNum)}
+                            className={`w-7 h-7 rounded-lg text-xs font-mono font-medium transition-colors ${
+                              currentPage === pageNum
+                                ? 'bg-indigo-600 text-white'
+                                : 'bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-300'
+                            }`}
+                          >
+                            {pageNum}
+                          </button>
+                        );
+                      })}
+
+                      <button
+                        onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                        disabled={currentPage === totalPages}
+                        className="p-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-slate-300"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* SECTION 2: PROVIDER CONNECTION & PERIODIC SYNC */}
+          {activeSection === 'connection' && (
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+              {/* Provider Connection Credentials Card */}
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-sm space-y-5 text-xs">
+                <div className="flex items-center gap-3 pb-4 border-b border-slate-800">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center shrink-0">
+                    <Globe className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-white">
+                      بيانات الاتصال المباشر بالمزود (Provider API)
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      أدخل رابط الـ Base URL ورمز التوثيق الحقيقي (API Token) الخاص بحسابك
+                    </p>
+                  </div>
+                </div>
+
+                {/* Presets Selector */}
+                <div className="space-y-2">
+                  <label className="block font-semibold text-slate-300">
+                    1. اختر المزود أو ابدأ بربط مخصص:
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {PROVIDER_PRESETS.map((preset) => {
+                      const isSelected = selectedPreset.id === preset.id;
+                      return (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          onClick={() => handleSelectPreset(preset)}
+                          className={`p-3 rounded-xl border text-right transition-all ${
+                            isSelected
+                              ? 'bg-indigo-600/15 border-indigo-500 text-white'
+                              : 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700'
+                          }`}
+                        >
+                          <div className="font-bold text-xs mb-0.5">{preset.name}</div>
+                          <div className="text-[11px] text-slate-400 line-clamp-1">
+                            {preset.description}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Base URL Input */}
+                <div className="space-y-1.5">
+                  <label className="block font-semibold text-slate-300">
+                    2. عنوان الـ API الأساسي للمزود (Base URL):
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-500">
+                      <Globe className="w-4 h-4" />
+                    </div>
+                    <input
+                      type="text"
+                      value={baseUrl}
+                      onChange={(e) => setBaseUrl(e.target.value)}
+                      placeholder="https://api.mersal-card.com/"
+                      dir="ltr"
+                      className="w-full pl-3 pr-9 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 font-mono-numbers"
+                    />
+                  </div>
+                </div>
+
+                {/* API Token Input */}
+                <div className="space-y-1.5">
+                  <label className="block font-semibold text-slate-300">
+                    3. رمز التوثيق السري (API Token):
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-500">
+                      <KeyRound className="w-4 h-4" />
+                    </div>
+                    <input
+                      type={showConnectionToken ? 'text' : 'password'}
+                      value={apiToken}
+                      onChange={(e) => setApiToken(e.target.value)}
+                      placeholder="أدخل الـ API Token الحقيقي الخاص بك..."
+                      dir="ltr"
+                      className="w-full pl-16 pr-9 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 font-mono-numbers"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConnectionToken(!showConnectionToken)}
+                      className="absolute inset-y-0 left-0 pl-3 pr-2 flex items-center text-xs text-indigo-400 hover:text-indigo-300 font-medium"
+                    >
+                      {showConnectionToken ? 'إخفاء' : 'عرض'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="pt-2 flex flex-wrap items-center justify-between gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBaseUrl('');
+                      setApiToken('');
+                      setRawProducts([]);
+                      setIsLiveConnected(false);
+                      setUserBalance(null);
+                      setUserEmail(null);
+                      localStorage.removeItem('shadx_base_url');
+                      localStorage.removeItem('shadx_api_token');
+                      setNotification({
+                        text: 'تم مسح بيانات الاتصال وتفريغ الكتالوج المحلي بنجاح.',
+                        type: 'info',
+                      });
+                    }}
+                    className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium transition-colors"
+                  >
+                    مسح البيانات المحفوظة
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await handleFetchProducts();
+                    }}
+                    disabled={isLoading}
+                    className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold flex items-center gap-2 transition-colors shadow-md shadow-indigo-600/20 disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+                    <span>{isLoading ? 'جارِ الاتصال والجلب...' : 'حفظ وجلب الكتالوج الآن'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Periodic Sync Schedule Inline Card */}
+              <SyncScheduleModal
+                isOpen={true}
+                inline={true}
+                onClose={() => {}}
+                config={syncConfig}
+                onUpdateConfig={(newCfg) => setSyncConfig((prev) => ({ ...prev, ...newCfg }))}
+                onTriggerManualSync={handleTriggerManualSync}
+                isLiveConnected={isLiveConnected}
+              />
+            </div>
+          )}
+
+          {/* SECTION 3: PRICING & COST THRESHOLDS */}
+          {activeSection === 'pricing' && (
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+              <MarginConfigModal
+                isOpen={true}
+                inline={true}
+                onClose={() => {}}
+                config={marginConfig}
+                onSave={(newCfg) => {
+                  setMarginConfig(newCfg);
+                  setNotification({
+                    text: `تم تحديث هامش الربح (${newCfg.mode === 'percentage' ? `+${newCfg.value}%` : `+$${newCfg.value}`}) واحتساب سعر البيع المقترح لكافة المنتجات.`,
+                    type: 'success',
+                  });
+                }}
+              />
+
+              <ThresholdConfigModal
+                isOpen={true}
+                inline={true}
+                onClose={() => {}}
+                thresholdConfig={thresholdConfig}
+                onSave={(newCfg) => {
+                  setThresholdConfig(newCfg);
+                  setNotification({
+                    text: 'تم حفظ وتفعيل إعدادات الحدود السعرية وتنبيهات انخفاض التكلفة.',
+                    type: 'success',
+                  });
+                }}
+                products={catalogProducts}
+                onSimulateCostDrop={handleSimulateCostDrop}
+              />
+            </div>
+          )}
+
+          {/* SECTION 4: ALERTS CENTER & RULES */}
+          {activeSection === 'alerts' && (
+            <AlertsDrawer
+              isOpen={true}
+              inline={true}
+              onClose={() => {}}
+              alerts={alerts}
+              unreadCount={unreadAlertsCount}
+              onMarkAsRead={handleMarkAlertAsRead}
+              onMarkAllAsRead={handleMarkAllAlertsAsRead}
+              onClearAlerts={handleClearAlerts}
+              ruleConfig={alertRuleConfig}
+              onUpdateRuleConfig={setAlertRuleConfig}
+              onSimulateProviderChanges={handleCheckProviderChanges}
+              onSelectProduct={(prod) => setActiveModalProduct(prod)}
+              productsMap={productsMap}
+            />
+          )}
+
+          {/* SECTION 5: API DOCUMENTATION */}
+          {activeSection === 'docs' && (
+            <DocsDrawer
+              isOpen={true}
+              inline={true}
+              onClose={() => {}}
+            />
+          )}
+
+          {/* SECTION 6: CLOUD DEPLOYMENT GUIDE */}
+          {activeSection === 'deploy' && (
+            <DeploymentGuideModal
+              isOpen={true}
+              inline={true}
+              onClose={() => {}}
+            />
+          )}
+        </main>
+      </div>
+
+      {/* Integration & Request Simulator Modal (Opens when clicking a product) */}
       <ProductDetailModal
         product={activeModalProduct}
         onClose={() => {
@@ -1428,28 +1627,6 @@ export default function App() {
         onApplyMappingFix={handleApplyMappingFix}
       />
 
-      {/* Built-in API Docs Reference Drawer */}
-      <DocsDrawer
-        isOpen={isDocsDrawerOpen}
-        onClose={() => setIsDocsDrawerOpen(false)}
-      />
-
-      {/* Smart Alerts & Activity Log Drawer */}
-      <AlertsDrawer
-        isOpen={isAlertsDrawerOpen}
-        onClose={() => setIsAlertsDrawerOpen(false)}
-        alerts={alerts}
-        unreadCount={unreadAlertsCount}
-        onMarkAsRead={handleMarkAlertAsRead}
-        onMarkAllAsRead={handleMarkAllAlertsAsRead}
-        onClearAlerts={handleClearAlerts}
-        ruleConfig={alertRuleConfig}
-        onUpdateRuleConfig={setAlertRuleConfig}
-        onSimulateProviderChanges={handleCheckProviderChanges}
-        onSelectProduct={(prod) => setActiveModalProduct(prod)}
-        productsMap={productsMap}
-      />
-
       {/* Real-time Alert Toast Notification */}
       <AlertToast
         alert={activeToastAlert}
@@ -1461,23 +1638,7 @@ export default function App() {
             setActiveModalProduct(prod);
           }
         }}
-        onOpenAlertsCenter={() => setIsAlertsDrawerOpen(true)}
-      />
-
-      {/* Periodic Sync Schedule Modal */}
-      <SyncScheduleModal
-        isOpen={isSyncModalOpen}
-        onClose={() => setIsSyncModalOpen(false)}
-        config={syncConfig}
-        onUpdateConfig={(newCfg) => setSyncConfig((prev) => ({ ...prev, ...newCfg }))}
-        onTriggerManualSync={handleTriggerManualSync}
-        isLiveConnected={isLiveConnected}
-      />
-
-      {/* Cloud Deployment Architecture Guide Modal */}
-      <DeploymentGuideModal
-        isOpen={isDeploymentModalOpen}
-        onClose={() => setIsDeploymentModalOpen(false)}
+        onOpenAlertsCenter={() => setActiveSection('alerts')}
       />
     </div>
   );
