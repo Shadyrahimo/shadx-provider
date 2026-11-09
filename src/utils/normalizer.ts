@@ -436,10 +436,54 @@ export function transformRawProduct(
     enabled: boolean;
     defaultThreshold: number | '';
     productThresholds: Record<string | number, number>;
-  }
+  },
+  previousOrBaselineCost?: number
 ): CatalogProduct {
   const cost = typeof raw.price === 'string' ? parseFloat(raw.price) || 0 : Number(raw.price || 0);
   const basePrice = raw.base_price !== undefined ? parseFloat(String(raw.base_price)) : undefined;
+
+  // Determine if cost increased relative to previous snapshot or provider base_price
+  const referencePreviousCost =
+    previousOrBaselineCost !== undefined && previousOrBaselineCost > 0 && previousOrBaselineCost !== cost
+      ? previousOrBaselineCost
+      : basePrice !== undefined && basePrice > 0 && basePrice < cost
+      ? basePrice
+      : undefined;
+
+  const hasCostIncreased = Boolean(referencePreviousCost !== undefined && cost > referencePreviousCost);
+  const costIncreasePercent =
+    hasCostIncreased && referencePreviousCost
+      ? Number((((cost - referencePreviousCost) / referencePreviousCost) * 100).toFixed(1))
+      : undefined;
+
+  const standardSuggestedSell = calculateSuggestedPrice(cost, margin);
+  const standardMarginPct =
+    cost > 0 ? Number((((standardSuggestedSell - cost) / cost) * 100).toFixed(1)) : 0;
+
+  let suggestedSellPriceUsd = standardSuggestedSell;
+  let profitMarginPercent = standardMarginPct;
+  let isLowMargin = false;
+  let lowMarginReason: string | undefined = undefined;
+
+  if (hasCostIncreased && referencePreviousCost) {
+    // Retail price that was set based on the earlier (lower) cost before the provider's cost increase
+    const priorRetailSellPrice = calculateSuggestedPrice(referencePreviousCost, margin);
+    const erodedMarginPct =
+      cost > 0 ? Number((((priorRetailSellPrice - cost) / cost) * 100).toFixed(1)) : 0;
+
+    if (erodedMarginPct < 5) {
+      suggestedSellPriceUsd = priorRetailSellPrice;
+      profitMarginPercent = erodedMarginPct;
+      isLowMargin = true;
+      lowMarginReason = `انخفض هامش الربح إلى ${erodedMarginPct}% (< 5%) بسبب ارتفاع التكلفة من $${referencePreviousCost.toFixed(3)} إلى $${cost.toFixed(3)} (+${costIncreasePercent}%)`;
+    } else if (standardMarginPct < 5) {
+      isLowMargin = true;
+      lowMarginReason = `هامش الربح (${standardMarginPct}%) أقل من 5% بعد ارتفاع التكلفة (+${costIncreasePercent}%)`;
+    }
+  } else if (cost > 0 && standardMarginPct < 5) {
+    isLowMargin = true;
+    lowMarginReason = `هامش الربح الحالي (${standardMarginPct}%) أقل من الحد الآمن (5%)`;
+  }
 
   let rawParamsList: string[] = [];
   if (Array.isArray(raw.params)) {
@@ -501,7 +545,13 @@ export function transformRawProduct(
     category: catName,
     costPriceUsd: cost,
     basePriceUsd: basePrice,
-    suggestedSellPriceUsd: calculateSuggestedPrice(cost, margin),
+    previousCostUsd: referencePreviousCost,
+    costIncreasePercent,
+    hasCostIncreased,
+    suggestedSellPriceUsd,
+    profitMarginPercent,
+    isLowMargin,
+    lowMarginReason,
     isAvailable,
     productType: type,
     qtyValues: raw.qty_values ?? null,

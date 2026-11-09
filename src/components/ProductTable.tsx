@@ -11,6 +11,7 @@ import {
   ChevronRight,
   ChevronLeft,
   MoveHorizontal,
+  TrendingDown,
 } from 'lucide-react';
 import { CatalogProduct, NormalizedParam } from '../types';
 
@@ -157,8 +158,10 @@ export const ProductTable: React.FC<ProductTableProps> = ({
           const isSelected = selectedIds.has(product.id);
           const profitUsd = product.suggestedSellPriceUsd - product.costPriceUsd;
           const profitPercent =
-            product.costPriceUsd > 0
-              ? Math.round((profitUsd / product.costPriceUsd) * 100)
+            product.profitMarginPercent !== undefined
+              ? product.profitMarginPercent
+              : product.costPriceUsd > 0
+              ? Number(((profitUsd / product.costPriceUsd) * 100).toFixed(1))
               : 0;
 
           return (
@@ -166,7 +169,9 @@ export const ProductTable: React.FC<ProductTableProps> = ({
               key={product.id}
               onClick={() => onToggleSelect(product.id)}
               className={`bg-slate-900 border rounded-xl p-4 transition-all cursor-pointer flex flex-col justify-between gap-3 ${
-                product.isBelowThreshold
+                product.isLowMargin
+                  ? 'border-rose-500/60 bg-rose-950/20'
+                  : product.isBelowThreshold
                   ? 'border-amber-500/50 bg-amber-950/15'
                   : isSelected
                   ? 'border-indigo-500 bg-indigo-950/25'
@@ -201,6 +206,16 @@ export const ProductTable: React.FC<ProductTableProps> = ({
                   </div>
 
                   <div className="flex items-center gap-1.5 flex-wrap">
+                    {product.isLowMargin && (
+                      <span
+                        className="text-[10px] font-bold text-rose-200 bg-rose-600/30 border border-rose-500/60 px-2 py-0.5 rounded flex items-center gap-1"
+                        title={product.lowMarginReason || 'هامش الربح أقل من 5%'}
+                      >
+                        <TrendingDown className="w-3 h-3 text-rose-400" />
+                        <span>Low Margin (&lt;5%)</span>
+                      </span>
+                    )}
+
                     {product.isAvailable ? (
                       <span className="text-[11px] font-medium text-emerald-400 bg-emerald-950/50 border border-emerald-500/20 px-2 py-0.5 rounded">
                         متاح
@@ -239,21 +254,52 @@ export const ProductTable: React.FC<ProductTableProps> = ({
               </div>
 
               {/* Pricing Strip */}
-              <div className="grid grid-cols-2 gap-2 bg-slate-950 p-2.5 rounded-lg border border-slate-800/80 text-xs font-mono-numbers">
+              <div
+                className={`grid grid-cols-2 gap-2 p-2.5 rounded-lg border text-xs font-mono-numbers ${
+                  product.isLowMargin
+                    ? 'bg-rose-950/40 border-rose-500/40'
+                    : 'bg-slate-950 border-slate-800/80'
+                }`}
+              >
                 <div>
                   <span className="text-[10px] text-slate-400 block font-sans">سعر التكلفة:</span>
-                  <span className="font-bold text-slate-200 text-sm">
-                    ${product.costPriceUsd.toFixed(3)}
-                  </span>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="font-bold text-slate-200 text-sm">
+                      ${product.costPriceUsd.toFixed(3)}
+                    </span>
+                    {product.hasCostIncreased && product.costIncreasePercent !== undefined && (
+                      <span className="text-[10px] font-bold text-rose-400 bg-rose-950/80 border border-rose-500/40 px-1.5 py-0.2 rounded">
+                        ▲ +{product.costIncreasePercent}%
+                      </span>
+                    )}
+                  </div>
+                  {product.hasCostIncreased && product.previousCostUsd !== undefined && (
+                    <span className="text-[10px] text-slate-400 block">
+                      السابق: ${product.previousCostUsd.toFixed(3)}
+                    </span>
+                  )}
                 </div>
                 <div className="text-left">
                   <span className="text-[10px] text-slate-400 block font-sans">سعر البيع المقترح:</span>
-                  <span className="font-bold text-emerald-400 text-sm">
+                  <span
+                    className={`font-bold text-sm ${
+                      product.isLowMargin ? 'text-rose-300' : 'text-emerald-400'
+                    }`}
+                  >
                     ${product.suggestedSellPriceUsd.toFixed(2)}{' '}
-                    <span className="text-[11px] text-emerald-500">
-                      (+{profitPercent}%)
+                    <span
+                      className={`text-[11px] ${
+                        product.isLowMargin ? 'text-rose-400 font-extrabold' : 'text-emerald-500'
+                      }`}
+                    >
+                      ({profitPercent >= 0 ? `+${profitPercent}%` : `${profitPercent}%`})
                     </span>
                   </span>
+                  {product.isLowMargin && (
+                    <span className="text-[10px] text-rose-400 font-semibold block font-sans mt-0.5">
+                      ⚠️ هامش منخفض (&lt;5%)
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -389,8 +435,10 @@ export const ProductTable: React.FC<ProductTableProps> = ({
                 const isSelected = selectedIds.has(product.id);
                 const profitUsd = product.suggestedSellPriceUsd - product.costPriceUsd;
                 const profitPercent =
-                  product.costPriceUsd > 0
-                    ? Math.round((profitUsd / product.costPriceUsd) * 100)
+                  product.profitMarginPercent !== undefined
+                    ? product.profitMarginPercent
+                    : product.costPriceUsd > 0
+                    ? Number(((profitUsd / product.costPriceUsd) * 100).toFixed(1))
                     : 0;
 
                 return (
@@ -398,7 +446,9 @@ export const ProductTable: React.FC<ProductTableProps> = ({
                     key={product.id}
                     onClick={() => onToggleSelect(product.id)}
                     className={`transition-colors cursor-pointer ${
-                      product.isBelowThreshold
+                      product.isLowMargin
+                        ? 'bg-rose-950/25 hover:bg-rose-950/35 border-r-2 border-r-rose-500'
+                        : product.isBelowThreshold
                         ? 'bg-amber-950/20 hover:bg-amber-950/30'
                         : isSelected
                         ? 'bg-indigo-950/30 hover:bg-indigo-950/40'
@@ -437,16 +487,33 @@ export const ProductTable: React.FC<ProductTableProps> = ({
                     </td>
 
                     <td className="py-3 px-4">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-semibold text-slate-100 hover:text-indigo-300 transition-colors">
                           {product.name}
                         </span>
+                        {product.isLowMargin && (
+                          <span
+                            className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-rose-600 text-white shadow-xs"
+                            title={
+                              product.lowMarginReason ||
+                              'تحذير: انخفض هامش الربح إلى أقل من 5% بسبب ارتفاع التكلفة'
+                            }
+                          >
+                            <TrendingDown className="w-3 h-3 shrink-0" />
+                            <span>Low Margin • هامش منخفض (&lt;5%)</span>
+                          </span>
+                        )}
                         {product.isBelowThreshold && (
                           <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500 text-slate-950">
                             فرصة سعر!
                           </span>
                         )}
                       </div>
+                      {product.isLowMargin && product.lowMarginReason && (
+                        <div className="text-[11px] text-rose-400 font-medium mt-0.5">
+                          {product.lowMarginReason}
+                        </div>
+                      )}
                       {product.basePriceUsd && product.basePriceUsd !== product.costPriceUsd && (
                         <div className="text-[11px] text-slate-500 font-mono-numbers">
                           السعر الأساسي: ${product.basePriceUsd}
@@ -464,13 +531,23 @@ export const ProductTable: React.FC<ProductTableProps> = ({
                       <div className="flex items-center gap-1.5 justify-start">
                         <span
                           className={`font-semibold ${
-                            product.isBelowThreshold
+                            product.isLowMargin
+                              ? 'text-rose-300 font-bold text-sm bg-rose-950/60 border border-rose-500/40 px-1.5 py-0.5 rounded'
+                              : product.isBelowThreshold
                               ? 'text-amber-300 font-bold text-sm bg-amber-950/60 border border-amber-500/40 px-1.5 py-0.5 rounded'
                               : 'text-slate-300'
                           }`}
                         >
                           ${product.costPriceUsd.toFixed(3)}
                         </span>
+                        {product.hasCostIncreased && product.costIncreasePercent !== undefined && (
+                          <span
+                            className="inline-flex items-center gap-0.5 bg-rose-500/20 text-rose-300 border border-rose-500/40 px-1.5 py-0.5 rounded text-[10px] font-bold"
+                            title={`ارتفعت التكلفة من $${product.previousCostUsd?.toFixed(3)} إلى $${product.costPriceUsd.toFixed(3)}`}
+                          >
+                            <span>▲ +{product.costIncreasePercent}%</span>
+                          </span>
+                        )}
                         {product.isBelowThreshold && (
                           <span
                             className="inline-flex items-center gap-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 rounded text-[10px] font-bold"
@@ -480,6 +557,11 @@ export const ProductTable: React.FC<ProductTableProps> = ({
                           </span>
                         )}
                       </div>
+                      {product.hasCostIncreased && product.previousCostUsd !== undefined && (
+                        <div className="text-[10px] text-rose-400/90 font-semibold mt-0.5">
+                          السابق: ${product.previousCostUsd.toFixed(3)}
+                        </div>
+                      )}
                       {product.isBelowThreshold && product.thresholdSavings !== undefined && (
                         <div className="text-[10px] text-amber-400 font-semibold mt-0.5">
                           وفّر: ${product.thresholdSavings}
@@ -488,13 +570,30 @@ export const ProductTable: React.FC<ProductTableProps> = ({
                     </td>
 
                     <td className="py-3 px-3.5 whitespace-nowrap text-left font-mono-numbers">
-                      <div className="font-bold text-emerald-400">
+                      <div
+                        className={`font-bold ${
+                          product.isLowMargin ? 'text-rose-400' : 'text-emerald-400'
+                        }`}
+                      >
                         ${product.suggestedSellPriceUsd.toFixed(2)}
                       </div>
-                      <div className="text-[10px] text-emerald-500/80 font-medium flex items-center justify-end gap-1">
-                        <span>+{profitUsd > 0 ? profitUsd.toFixed(2) : 0}$</span>
-                        <span>({profitPercent}%)</span>
+                      <div
+                        className={`text-[10px] font-medium flex items-center justify-end gap-1 ${
+                          product.isLowMargin ? 'text-rose-400 font-bold' : 'text-emerald-500/80'
+                        }`}
+                      >
+                        <span>
+                          {profitUsd >= 0 ? `+${profitUsd.toFixed(2)}$` : `${profitUsd.toFixed(2)}$`}
+                        </span>
+                        <span>({profitPercent >= 0 ? `+${profitPercent}%` : `${profitPercent}%`})</span>
                       </div>
+                      {product.isLowMargin && (
+                        <div className="mt-0.5 flex justify-end">
+                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40 font-sans">
+                            Low Margin (&lt;5%)
+                          </span>
+                        </div>
+                      )}
                     </td>
 
                     <td className="py-3 px-3 whitespace-nowrap text-center">

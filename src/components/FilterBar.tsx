@@ -13,6 +13,7 @@ import {
   DollarSign,
   Package,
   Wrench,
+  TrendingDown,
 } from 'lucide-react';
 import { FilterState } from '../types';
 
@@ -31,6 +32,7 @@ interface FilterBarProps {
   onSelectAll: () => void;
   isAllSelected: boolean;
   alertProductsCount: number;
+  lowMarginProductsCount?: number;
 }
 
 export const FilterBar: React.FC<FilterBarProps> = ({
@@ -48,6 +50,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
   onSelectAll,
   isAllSelected,
   alertProductsCount,
+  lowMarginProductsCount = 0,
 }) => {
   const hasActiveFilters =
     filters.searchQuery !== '' ||
@@ -59,7 +62,8 @@ export const FilterBar: React.FC<FilterBarProps> = ({
     filters.minCost !== '' ||
     filters.maxCost !== '' ||
     filters.sortBy !== 'id_asc' ||
-    filters.onlyThresholdAlerts;
+    filters.onlyThresholdAlerts ||
+    Boolean(filters.onlyLowMargin);
 
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 mb-4 shadow-sm space-y-3.5">
@@ -116,12 +120,13 @@ export const FilterBar: React.FC<FilterBarProps> = ({
             <option value="cost_desc">سعر التكلفة: من الأعلى للأقل</option>
             <option value="name_asc">الاسم: أبجدياً (أ - ي)</option>
             <option value="margin_desc">الأعلى هامش ربح مقترح</option>
+            <option value="margin_asc">⚠️ الأقل هامش ربح (Low Margin &lt; 5% أولاً)</option>
             <option value="savings_desc">⚡ الأعلى انخفاضاً عن الحد (أكبر وفر)</option>
           </select>
         </div>
       </div>
 
-      {/* Second Row: Specific Filters (Availability, Qty Type, Required Param, Price Range, Threshold Alert Toggle) */}
+      {/* Second Row: Specific Filters (Availability, Qty Type, Required Param, Price Range, Threshold & Low Margin Toggles) */}
       <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-800/80 text-xs">
         {/* Threshold Alert Filter Toggle */}
         <button
@@ -147,6 +152,36 @@ export const FilterBar: React.FC<FilterBarProps> = ({
             }`}
           >
             {alertProductsCount}
+          </span>
+        </button>
+
+        {/* Low Margin (< 5%) Filter Toggle */}
+        <button
+          type="button"
+          onClick={() =>
+            setFilters((prev) => ({ ...prev, onlyLowMargin: !prev.onlyLowMargin }))
+          }
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border ${
+            filters.onlyLowMargin
+              ? 'bg-rose-600 text-white border-rose-400 shadow-sm shadow-rose-600/25'
+              : lowMarginProductsCount > 0
+              ? 'bg-rose-950/50 text-rose-300 border-rose-500/50 hover:bg-rose-950/80'
+              : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200'
+          }`}
+          title="فلترة المنتجات التي انخفض هامش ربحها إلى أقل من 5% نتيجة ارتفاع التكلفة (Low Margin)"
+        >
+          <TrendingDown className={`w-3.5 h-3.5 ${filters.onlyLowMargin ? 'text-white' : 'text-rose-400'}`} />
+          <span>هامش منخفض (Low Margin &lt;5%)</span>
+          <span
+            className={`font-mono-numbers px-1.5 py-0.2 rounded-full text-[10px] ${
+              filters.onlyLowMargin
+                ? 'bg-slate-950 text-rose-300 font-bold'
+                : lowMarginProductsCount > 0
+                ? 'bg-rose-500/20 text-rose-300 font-bold'
+                : 'bg-slate-850 text-slate-400'
+            }`}
+          >
+            {lowMarginProductsCount}
           </span>
         </button>
         {/* Availability Filter Tabs */}

@@ -860,10 +860,10 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   <div className="flex flex-wrap items-center gap-1.5 pt-1">
                     <span className="text-[10px] text-slate-500">محاكاة سريعة:</span>
                     {[
-                      { label: '-5%', factor: 0.95 },
-                      { label: '-10%', factor: 0.9 },
-                      { label: '-15%', factor: 0.85 },
-                      { label: '+10%', factor: 1.1 },
+                      { label: '-5%', factor: 0.95, isHike: false },
+                      { label: '-10%', factor: 0.9, isHike: false },
+                      { label: '-15%', factor: 0.85, isHike: false },
+                      { label: '+12% (اختبار Low Margin <5%)', factor: 1.12, isHike: true },
                     ].map((preset) => (
                       <button
                         key={preset.label}
@@ -873,7 +873,11 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                           onSimulateCostDrop(product.id, nextCost);
                           setTrendRange('live');
                         }}
-                        className="px-2 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 font-mono-numbers text-[11px] transition-colors"
+                        className={`px-2 py-1 rounded-lg border font-mono-numbers text-[11px] transition-colors ${
+                          preset.isHike
+                            ? 'bg-rose-950/60 hover:bg-rose-900/70 border-rose-500/40 text-rose-300 font-bold'
+                            : 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-slate-300'
+                        }`}
                       >
                         {preset.label} (${(product.costPriceUsd * preset.factor).toFixed(2)})
                       </button>

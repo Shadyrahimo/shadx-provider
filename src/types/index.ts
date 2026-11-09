@@ -42,7 +42,13 @@ export interface CatalogProduct {
   category: string;
   costPriceUsd: number;
   basePriceUsd?: number;
+  previousCostUsd?: number;
+  costIncreasePercent?: number;
+  hasCostIncreased?: boolean;
   suggestedSellPriceUsd: number;
+  profitMarginPercent: number;
+  isLowMargin?: boolean;
+  lowMarginReason?: string;
   isAvailable: boolean;
   productType: 'package' | 'amount' | 'fixed';
   qtyValues: QtyValues;
@@ -89,8 +95,17 @@ export interface FilterState {
   integrationFilter: 'all' | 'ready' | 'needs_fix' | 'unmapped';
   minCost: number | '';
   maxCost: number | '';
-  sortBy: 'id_asc' | 'id_desc' | 'cost_asc' | 'cost_desc' | 'name_asc' | 'margin_desc' | 'savings_desc';
+  sortBy:
+    | 'id_asc'
+    | 'id_desc'
+    | 'cost_asc'
+    | 'cost_desc'
+    | 'name_asc'
+    | 'margin_desc'
+    | 'margin_asc'
+    | 'savings_desc';
   onlyThresholdAlerts: boolean;
+  onlyLowMargin?: boolean;
 }
 
 export type AlertSeverity = 'warning' | 'info' | 'success' | 'danger';

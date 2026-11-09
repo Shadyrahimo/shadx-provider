@@ -157,6 +157,7 @@ export default function App() {
     maxCost: '',
     sortBy: 'id_asc',
     onlyThresholdAlerts: false,
+    onlyLowMargin: false,
   });
 
   // Bulk selection
@@ -916,10 +917,19 @@ export default function App() {
     });
   };
 
-  // Transform raw items into enriched CatalogProduct items using active marginConfig and thresholdConfig
+  // Transform raw items into enriched CatalogProduct items using active marginConfig, thresholdConfig, and recorded cost history
   const catalogProducts = useMemo(() => {
-    return rawProducts.map((raw) => transformRawProduct(raw, marginConfig, thresholdConfig));
-  }, [rawProducts, marginConfig, thresholdConfig]);
+    return rawProducts.map((raw) => {
+      const historyPoints = priceHistoryMap[raw.id];
+      let baselineCost: number | undefined = undefined;
+      if (historyPoints && historyPoints.length >= 2) {
+        const firstCost = historyPoints[0].cost;
+        const prevCost = historyPoints[historyPoints.length - 2].cost;
+        baselineCost = Math.min(firstCost, prevCost);
+      }
+      return transformRawProduct(raw, marginConfig, thresholdConfig, baselineCost);
+    });
+  }, [rawProducts, marginConfig, thresholdConfig, priceHistoryMap]);
 
   // Fast lookup map for opening products by ID
   const productsMap = useMemo(() => {
@@ -931,6 +941,11 @@ export default function App() {
   // Count products triggering the threshold alert
   const alertProductsCount = useMemo(() => {
     return catalogProducts.filter((p) => p.isBelowThreshold).length;
+  }, [catalogProducts]);
+
+  // Count products where profit margin dropped below 5% (Low Margin)
+  const lowMarginProductsCount = useMemo(() => {
+    return catalogProducts.filter((p) => p.isLowMargin).length;
   }, [catalogProducts]);
 
   // Extract distinct categories with counts
@@ -951,6 +966,11 @@ export default function App() {
       .filter((p) => {
         // Price drop threshold alert filter
         if (filters.onlyThresholdAlerts && !p.isBelowThreshold) {
+          return false;
+        }
+
+        // Low Margin (< 5%) filter
+        if (filters.onlyLowMargin && !p.isLowMargin) {
           return false;
         }
 
@@ -1011,6 +1031,8 @@ export default function App() {
               b.suggestedSellPriceUsd - b.costPriceUsd -
               (a.suggestedSellPriceUsd - a.costPriceUsd)
             );
+          case 'margin_asc':
+            return (a.profitMarginPercent ?? 0) - (b.profitMarginPercent ?? 0);
           case 'id_desc':
             return Number(b.id) - Number(a.id);
           case 'id_asc':
@@ -1115,6 +1137,7 @@ export default function App() {
       maxCost: '',
       sortBy: 'id_asc',
       onlyThresholdAlerts: false,
+      onlyLowMargin: false,
     });
   };
 
@@ -1230,10 +1253,17 @@ export default function App() {
     }
   };
 
-  // Handler to simulate cost price reduction from provider API
-  const handleSimulateCostDrop = (productId: string | number, newLowerCost: number) => {
+  // Handler to simulate cost price change (drop or hike) from provider API
+  const handleSimulateCostDrop = (productId: string | number, newCostValue: number) => {
+    const prevRaw = rawProducts.find((p) => String(p.id) === String(productId));
+    const prevCost = prevRaw
+      ? typeof prevRaw.price === 'number'
+        ? prevRaw.price
+        : parseFloat(String(prevRaw.price)) || 0
+      : undefined;
+
     const updated = rawProducts.map((p) =>
-      String(p.id) === String(productId) ? { ...p, price: newLowerCost } : p
+      String(p.id) === String(productId) ? { ...p, price: newCostValue } : p
     );
     setRawProducts(updated);
     detectAndGenerateAlerts(updated, 'تخفيض التكلفة اليدوي');
@@ -1241,12 +1271,14 @@ export default function App() {
     if (activeModalProduct && String(activeModalProduct.id) === String(productId)) {
       const targetRaw = updated.find((p) => String(p.id) === String(productId));
       if (targetRaw) {
-        setActiveModalProduct(transformRawProduct(targetRaw, marginConfig, thresholdConfig));
+        setActiveModalProduct(
+          transformRawProduct(targetRaw, marginConfig, thresholdConfig, prevCost)
+        );
       }
     }
 
     setNotification({
-      text: `⚡ محاكاة تغير السعر: تم تحديث تكلفة منتج #${productId} إلى $${newLowerCost} وتحديث السجل الزمني للتكلفة!`,
+      text: `⚡ محاكاة تغير السعر: تم تحديث تكلفة منتج #${productId} إلى $${newCostValue} وتحديث السجل الزمني وهوامش الربح!`,
       type: 'success',
     });
   };
@@ -1633,6 +1665,7 @@ export default function App() {
                 onSelectAll={handleSelectAll}
                 isAllSelected={isAllSelected}
                 alertProductsCount={alertProductsCount}
+                lowMarginProductsCount={lowMarginProductsCount}
               />
 
               {/* Responsive Product Table & Cards */}
