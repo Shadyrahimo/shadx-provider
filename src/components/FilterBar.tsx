@@ -14,6 +14,7 @@ import {
   Package,
   Wrench,
   TrendingDown,
+  ShoppingCart,
 } from 'lucide-react';
 import { FilterState } from '../types';
 
@@ -33,6 +34,7 @@ interface FilterBarProps {
   isAllSelected: boolean;
   alertProductsCount: number;
   lowMarginProductsCount?: number;
+  onOpenBulkCart?: () => void;
 }
 
 export const FilterBar: React.FC<FilterBarProps> = ({
@@ -51,6 +53,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
   isAllSelected,
   alertProductsCount,
   lowMarginProductsCount = 0,
+  onOpenBulkCart,
 }) => {
   const hasActiveFilters =
     filters.searchQuery !== '' ||
@@ -361,7 +364,19 @@ export const FilterBar: React.FC<FilterBarProps> = ({
         </div>
 
         {/* Export & Bulk Action Buttons */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {onOpenBulkCart && (
+            <button
+              type="button"
+              onClick={onOpenBulkCart}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs transition-colors shadow-sm shadow-indigo-600/30 cursor-pointer"
+              title="سلة الشراء التلقائية لإرسال المنتجات المحددة للمزود دفعة واحدة عبر الـ API"
+            >
+              <ShoppingCart className="w-3.5 h-3.5" />
+              <span>سلة الشراء المجمعة ({selectedIds.size})</span>
+            </button>
+          )}
+
           <button
             onClick={onCopySelectedIds}
             disabled={selectedIds.size === 0}

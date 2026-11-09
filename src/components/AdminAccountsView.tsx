@@ -21,6 +21,9 @@ import {
   LogOut,
   Sparkles,
   KeyRound,
+  RefreshCw,
+  Code2,
+  AlertTriangle,
 } from 'lucide-react';
 import {
   doc,
@@ -43,7 +46,7 @@ import {
   UserAccountStatus,
   SubscriptionPlanTier,
 } from '../types';
-import { buildBackendUrl } from '../utils/normalizer';
+import { buildBackendUrl, getSubscriptionDaysRemaining } from '../utils/normalizer';
 import { PLAN_TIERS_INFO } from './AuthGateView';
 
 interface AdminAccountsViewProps {
@@ -54,6 +57,8 @@ interface AdminAccountsViewProps {
   onRefreshServerAccounts?: (updatedList?: UserAccountProfile[]) => void;
   onSignOut: () => Promise<void>;
   onNotify: (text: string, type: 'success' | 'error' | 'info') => void;
+  isDeveloperMode?: boolean;
+  onToggleDeveloperMode?: (val: boolean) => void;
 }
 
 export const AdminAccountsView: React.FC<AdminAccountsViewProps> = ({
@@ -64,6 +69,8 @@ export const AdminAccountsView: React.FC<AdminAccountsViewProps> = ({
   onRefreshServerAccounts,
   onSignOut,
   onNotify,
+  isDeveloperMode = false,
+  onToggleDeveloperMode,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | UserAccountStatus>('all');
@@ -91,6 +98,45 @@ export const AdminAccountsView: React.FC<AdminAccountsViewProps> = ({
   const [editNotes, setEditNotes] = useState('');
   const [editNewPassword, setEditNewPassword] = useState('');
   const [confirmDeleteUid, setConfirmDeleteUid] = useState<string | null>(null);
+
+  // Quick Activation & Plan Upgrade Modal State
+  const [activatingAccount, setActivatingAccount] = useState<UserAccountProfile | null>(null);
+  const [modalPlanTier, setModalPlanTier] = useState<SubscriptionPlanTier>('pro');
+  const [modalEndDate, setModalEndDate] = useState<string>(
+    () => new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0]
+  );
+  const [isSubmittingActivation, setIsSubmittingActivation] = useState(false);
+
+  const handleOpenActivationModal = (acc: UserAccountProfile) => {
+    setActivatingAccount(acc);
+    setModalPlanTier(acc.planTier || 'pro');
+    const defaultDate =
+      acc.subscriptionEndsAt && acc.subscriptionEndsAt.includes('-')
+        ? acc.subscriptionEndsAt
+        : new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0];
+    setModalEndDate(defaultDate);
+  };
+
+  const handleConfirmQuickActivation = async () => {
+    if (!activatingAccount) return;
+    setIsSubmittingActivation(true);
+    try {
+      const ok = await applyAccountMutation(activatingAccount.uid, {
+        accountStatus: 'active',
+        planTier: modalPlanTier,
+        subscriptionEndsAt: modalEndDate,
+      });
+      if (ok) {
+        onNotify(
+          `تم تفعيل حساب (${activatingAccount.storeName}) وتحديث باقته إلى ${modalPlanTier.toUpperCase()} بنجاح، وتم إرسال إشعار التفعيل البريدي للمشترك.`,
+          'success'
+        );
+        setActivatingAccount(null);
+      }
+    } finally {
+      setIsSubmittingActivation(false);
+    }
+  };
 
   // KPI Counts
   const stats = useMemo(() => {
@@ -765,6 +811,45 @@ export const AdminAccountsView: React.FC<AdminAccountsViewProps> = ({
         </form>
       )}
 
+      {/* Owner Developer Mode Control Panel */}
+      {isOwner && onToggleDeveloperMode && (
+        <div className="bg-slate-900 border border-indigo-500/30 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-indigo-500/15 text-indigo-400 border border-indigo-500/30 flex items-center justify-center shrink-0">
+              <Code2 className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-extrabold text-white">
+                وضع المطور (Developer Mode) • تصحيح بيانات المزودين
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                عند تفعيل هذا الوضع، يظهر زر <strong>&lt;/&gt; Raw</strong> لكل منتج في جدول المنتجات لعرض البيانات الخام للتحقق وتصحيح الأخطاء.
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              const next = !isDeveloperMode;
+              onToggleDeveloperMode(next);
+              onNotify(
+                next ? 'تم تفعيل وضع المطور (Developer Mode) بنجاح.' : 'تم إيقاف وضع المطور.',
+                'success'
+              );
+            }}
+            className={`px-4 py-2.5 rounded-xl font-extrabold text-xs flex items-center gap-2 transition-all cursor-pointer shrink-0 ${
+              isDeveloperMode
+                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                : 'bg-slate-950 hover:bg-slate-800 text-slate-300 border border-slate-800'
+            }`}
+          >
+            <Code2 className="w-4 h-4" />
+            <span>{isDeveloperMode ? 'وضع المطور مفعل (مُشغّل)' : 'تفعيل وضع المطور'}</span>
+          </button>
+        </div>
+      )}
+
       {/* Search & Filter Bar (for Owner) */}
       {isOwner && (
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
@@ -914,6 +999,30 @@ export const AdminAccountsView: React.FC<AdminAccountsViewProps> = ({
                         <Calendar className="w-3.5 h-3.5 text-indigo-400" />
                         <span>ينتهي في: {acc.subscriptionEndsAt}</span>
                       </span>
+
+                      {/* Expiration Warning Badge */}
+                      {(() => {
+                        const { daysRemaining, isExpiringSoon, isExpired } = getSubscriptionDaysRemaining(
+                          acc.subscriptionEndsAt
+                        );
+                        if (isExpired) {
+                          return (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-rose-600/30 text-rose-300 border border-rose-500/50">
+                              <AlertTriangle className="w-3 h-3 text-rose-400" />
+                              <span>منتهي الصلاحية</span>
+                            </span>
+                          );
+                        }
+                        if (isExpiringSoon) {
+                          return (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/50 animate-pulse">
+                              <Clock className="w-3 h-3 text-amber-400" />
+                              <span>ينتهي قريباً (متبقي {daysRemaining} أيام)</span>
+                            </span>
+                          );
+                        }
+                        return null;
+                      })()}
                     </div>
 
                     {isOwner && acc.notes && !isEditing && (
@@ -927,6 +1036,16 @@ export const AdminAccountsView: React.FC<AdminAccountsViewProps> = ({
                   <div className="flex flex-wrap items-center gap-2 shrink-0">
                     {isOwner && !isAccountOwner && (
                       <>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenActivationModal(acc)}
+                          className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer"
+                          title="تفعيل الحساب وتحديد مدة الاشتراك وترقية الباقة بضغطة زر مع إرسال إشعار بريدي"
+                        >
+                          <Sparkles className="w-3.5 h-3.5" />
+                          <span>تفعيل وترقية سريعة</span>
+                        </button>
+
                         {acc.accountStatus !== 'active' ? (
                           <button
                             type="button"
@@ -934,7 +1053,7 @@ export const AdminAccountsView: React.FC<AdminAccountsViewProps> = ({
                             className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold flex items-center gap-1.5 transition-colors shadow-xs"
                           >
                             <CheckCircle2 className="w-3.5 h-3.5" />
-                            <span>تفعيل الحساب</span>
+                            <span>تفعيل</span>
                           </button>
                         ) : (
                           <button
@@ -943,7 +1062,7 @@ export const AdminAccountsView: React.FC<AdminAccountsViewProps> = ({
                             className="px-3 py-1.5 rounded-xl bg-rose-600/20 hover:bg-rose-600 border border-rose-500/40 text-rose-300 hover:text-white font-bold flex items-center gap-1.5 transition-colors"
                           >
                             <Ban className="w-3.5 h-3.5" />
-                            <span>إيقاف مؤقت</span>
+                            <span>إيقاف</span>
                           </button>
                         )}
 
@@ -1126,6 +1245,124 @@ export const AdminAccountsView: React.FC<AdminAccountsViewProps> = ({
           })}
         </div>
       </div>
+
+      {/* Quick Activation & Plan Upgrade Modal */}
+      {activatingAccount && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 font-sans"
+          dir="rtl"
+        >
+          <div
+            className="fixed inset-0"
+            onClick={() => setActivatingAccount(null)}
+            aria-hidden="true"
+          />
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl relative z-10 space-y-5">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-white">
+                    تفعيل الحساب وترقية باقة المشترك
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    {activatingAccount.storeName} ({activatingAccount.email})
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActivatingAccount(null)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              <div className="space-y-1.5">
+                <label className="block font-bold text-slate-300">
+                  اختر باقة الاشتراك المدفوعة:
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {(['starter', 'pro', 'enterprise'] as SubscriptionPlanTier[]).map((tier) => (
+                    <button
+                      key={tier}
+                      type="button"
+                      onClick={() => setModalPlanTier(tier)}
+                      className={`py-2.5 px-3 rounded-xl border font-bold text-xs capitalize transition-all cursor-pointer ${
+                        modalPlanTier === tier
+                          ? 'bg-indigo-600 text-white border-indigo-500 shadow-md shadow-indigo-600/30'
+                          : 'bg-slate-950 text-slate-300 border-slate-800 hover:bg-slate-800'
+                      }`}
+                    >
+                      {tier === 'starter'
+                        ? 'Starter (أساسي)'
+                        : tier === 'pro'
+                        ? 'Pro (احترافي)'
+                        : 'Enterprise (شركات)'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block font-bold text-slate-300">
+                  تاريخ انتهاء الاشتراك (Subscription Expiry Date):
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-500">
+                    <Calendar className="w-4 h-4" />
+                  </div>
+                  <input
+                    type="date"
+                    value={modalEndDate}
+                    onChange={(e) => setModalEndDate(e.target.value)}
+                    className="w-full pl-3 pr-10 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 font-mono-numbers text-xs focus:outline-none focus:border-indigo-500"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-emerald-200 text-xs flex items-start gap-2.5 leading-relaxed">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                <span>
+                  عند الضغط على تفعيل، سيتم تحويل حالة الحساب إلى <strong>نشط ومفعل</strong> وتحديث تاريخ الانتهاء، مع إرسال إشعار بريدي تلقائي للمشترك وتفعيل صلاحية استخدام المنصة لديه.
+                </span>
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-slate-800 flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setActivatingAccount(null)}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold transition-colors cursor-pointer"
+              >
+                إلغاء
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmQuickActivation}
+                disabled={isSubmittingActivation}
+                className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold flex items-center gap-2 transition-all shadow-lg shadow-emerald-600/25 disabled:opacity-50 cursor-pointer"
+              >
+                {isSubmittingActivation ? (
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="w-4 h-4" />
+                )}
+                <span>
+                  {isSubmittingActivation
+                    ? 'جارِ التفعيل وإرسال الإشعار...'
+                    : 'تفعيل الحساب وترقية الباقة فوراً'}
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

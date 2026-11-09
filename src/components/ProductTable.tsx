@@ -22,6 +22,8 @@ import {
   SlidersHorizontal,
   DollarSign,
   Scale,
+  X,
+  RefreshCw,
 } from 'lucide-react';
 import { CatalogProduct, NormalizedParam } from '../types';
 
@@ -34,6 +36,8 @@ interface ProductTableProps {
   providerBaseUrl: string;
   onGoToConnection?: () => void;
   onCompareProduct?: (product: CatalogProduct) => void;
+  isDeveloperMode?: boolean;
+  onRefresh?: () => Promise<void> | void;
 }
 
 export const ProductTable: React.FC<ProductTableProps> = ({
@@ -44,11 +48,59 @@ export const ProductTable: React.FC<ProductTableProps> = ({
   onOpenProductDetail,
   onGoToConnection,
   onCompareProduct,
+  isDeveloperMode = false,
+  onRefresh,
 }) => {
   const [copiedId, setCopiedId] = useState<string | number | null>(null);
   const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
   const [expandedRowIds, setExpandedRowIds] = useState<Set<string | number>>(new Set());
+  const [rawModalProduct, setRawModalProduct] = useState<CatalogProduct | null>(null);
   const tableScrollRef = useRef<HTMLDivElement | null>(null);
+
+  // Pull to Refresh state
+  const [touchStartY, setTouchStartY] = useState<number>(0);
+  const [pullDistance, setPullDistance] = useState<number>(0);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (window.scrollY > 10) return;
+    if (tableScrollRef.current && tableScrollRef.current.scrollTop > 10) return;
+    if (e.touches && e.touches[0]) {
+      setTouchStartY(e.touches[0].clientY);
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (touchStartY === 0 || isRefreshing) return;
+    if (window.scrollY > 10) return;
+    if (e.touches && e.touches[0]) {
+      const currentY = e.touches[0].clientY;
+      const diff = currentY - touchStartY;
+      if (diff > 0) {
+        setPullDistance(Math.min(120, diff * 0.4));
+      } else {
+        setPullDistance(0);
+      }
+    }
+  };
+
+  const handleTouchEnd = async () => {
+    if (touchStartY === 0 || isRefreshing) return;
+    if (pullDistance >= 65 && onRefresh) {
+      setIsRefreshing(true);
+      setPullDistance(70);
+      try {
+        await onRefresh();
+      } finally {
+        setIsRefreshing(false);
+        setPullDistance(0);
+        setTouchStartY(0);
+      }
+    } else {
+      setPullDistance(0);
+      setTouchStartY(0);
+    }
+  };
 
   const handleHorizontalScroll = (direction: 'right' | 'left') => {
     if (!tableScrollRef.current) return;
@@ -142,7 +194,30 @@ export const ProductTable: React.FC<ProductTableProps> = ({
   }
 
   return (
-    <div className="space-y-3">
+    <div
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      className="space-y-3 relative select-none"
+      style={{
+        transform: pullDistance > 0 ? `translateY(${pullDistance}px)` : 'translateY(0px)',
+        transition: pullDistance === 0 ? 'transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)' : 'none',
+      }}
+    >
+      {/* Pull to Refresh Visual Indicator Banner */}
+      {(pullDistance > 10 || isRefreshing) && (
+        <div className="absolute -top-12 left-0 right-0 flex items-center justify-center gap-2 py-2 text-xs font-bold text-indigo-300 bg-slate-900/90 border border-indigo-500/40 rounded-xl shadow-lg z-30 transition-all">
+          <RefreshCw className={`w-4 h-4 text-indigo-400 ${isRefreshing ? 'animate-spin' : ''}`} />
+          <span>
+            {isRefreshing
+              ? 'جاري تحديث بيانات المنتجات وسعر التكلفة من المزود...'
+              : pullDistance >= 65
+              ? 'أفلت الآن لتحديث البيانات فوراً'
+              : 'اسحب للأسفل لتحديث المنتجات...'}
+          </span>
+        </div>
+      )}
+
       {/* View Mode Switcher Bar */}
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
         <span className="text-slate-400">
@@ -787,6 +862,21 @@ export const ProductTable: React.FC<ProductTableProps> = ({
                             </span>
                           </button>
 
+                          {isDeveloperMode && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setRawModalProduct(product);
+                              }}
+                              className="p-1.5 sm:px-2 sm:py-1 bg-purple-950/60 hover:bg-purple-900 border border-purple-500/50 text-purple-300 hover:text-white rounded-lg text-[10px] font-mono font-bold transition-colors flex items-center gap-1"
+                              title="وضع المطور: عرض بيانات المزود الخام (Raw Data)"
+                              aria-label="عرض البيانات الخام"
+                            >
+                              <span>&lt;/&gt; Raw</span>
+                            </button>
+                          )}
+
                           {/* Expand/Collapse Row Details Button */}
                           <button
                             type="button"
@@ -1029,6 +1119,92 @@ export const ProductTable: React.FC<ProductTableProps> = ({
           </table>
         </div>
       </div>
+
+      {/* Developer Mode Raw Data Inspection Modal */}
+      {rawModalProduct && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 font-sans"
+          dir="rtl"
+        >
+          <div
+            className="fixed inset-0"
+            onClick={() => setRawModalProduct(null)}
+            aria-hidden="true"
+          />
+          <div className="bg-slate-900 border border-indigo-500/50 rounded-2xl w-full max-w-2xl p-6 shadow-2xl relative z-10 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center">
+                  <Code2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-white">
+                    وضع المطور (Developer Mode) • بيانات المزود الخام
+                  </h3>
+                  <p className="text-xs text-slate-400 font-mono-numbers">
+                    {rawModalProduct.name} (ID: #{rawModalProduct.id})
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRawModalProduct(null)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400 font-bold">بنية البيانات الخام (Raw Data JSON):</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(JSON.stringify(rawModalProduct, null, 2));
+                    alert('تم نسخ البيانات الخام إلى الحافظة!');
+                  }}
+                  className="px-3 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-[11px]"
+                >
+                  نسخ البيانات الخام
+                </button>
+              </div>
+              <pre
+                dir="ltr"
+                className="bg-slate-950 p-4 rounded-xl border border-slate-800 text-xs font-mono text-emerald-400 overflow-x-auto max-h-[400px] text-left"
+              >
+                {JSON.stringify(
+                  {
+                    id: rawModalProduct.id,
+                    name: rawModalProduct.name,
+                    category: rawModalProduct.category,
+                    costPriceUsd: rawModalProduct.costPriceUsd,
+                    suggestedSellPriceUsd: rawModalProduct.suggestedSellPriceUsd,
+                    isAvailable: rawModalProduct.isAvailable,
+                    productType: rawModalProduct.productType,
+                    qtyValues: rawModalProduct.qtyValues,
+                    rawParams: rawModalProduct.rawParams,
+                    normalizedParams: rawModalProduct.normalizedParams,
+                    integrationStatus: rawModalProduct.integrationStatus,
+                  },
+                  null,
+                  2
+                )}
+              </pre>
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setRawModalProduct(null)}
+                className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold cursor-pointer"
+              >
+                إغلاق النافذة
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

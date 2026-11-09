@@ -18,7 +18,11 @@ import {
   Users,
   Crown,
   LogOut,
+  FileText,
+  ShieldCheck,
+  History,
 } from 'lucide-react';
+import { LegalTabType } from './TermsDrawer';
 import {
   SyncScheduleConfig,
   MarginConfig,
@@ -35,7 +39,9 @@ export type ActiveSectionId =
   | 'pricing'
   | 'alerts'
   | 'docs'
-  | 'deploy';
+  | 'deploy'
+  | 'settings'
+  | 'orders';
 
 interface SidebarProps {
   activeSection: ActiveSectionId;
@@ -56,6 +62,8 @@ interface SidebarProps {
   currentUserProfile?: UserAccountProfile | null;
   pendingAccountsCount?: number;
   onSignOut?: () => void;
+  onOpenLegalDrawer?: (tab: LegalTabType) => void;
+  showMobileBottomBar?: boolean;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -77,6 +85,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   currentUserProfile,
   pendingAccountsCount = 0,
   onSignOut,
+  onOpenLegalDrawer,
+  showMobileBottomBar = true,
 }) => {
   const isOwner =
     currentUserProfile?.email === OWNER_EMAIL || currentUserProfile?.role === 'owner';
@@ -181,6 +191,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
       shortLabel: 'النشر',
       subtitle: 'GitHub + Neon + Render + Vercel',
       icon: CloudUpload,
+    },
+    {
+      id: 'settings',
+      label: 'إعدادات المنصة الموحدة',
+      shortLabel: 'الإعدادات',
+      subtitle: 'التنبيهات، المزامنة، التسعير، والمظهر',
+      icon: Sliders,
+    },
+    {
+      id: 'orders',
+      label: 'سجل الطلبات السابقة',
+      shortLabel: 'الطلبات',
+      subtitle: 'جلب وتتبع عمليات الشراء عبر الـ API',
+      icon: History,
     },
   ];
 
@@ -418,6 +442,34 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         )}
 
+        {onOpenLegalDrawer && (
+          <div className="pt-2 border-t border-slate-800/80 grid grid-cols-2 gap-1.5 text-[11px]">
+            <button
+              type="button"
+              onClick={() => {
+                onOpenLegalDrawer('terms');
+                onCloseMobile();
+              }}
+              className="py-1.5 px-2 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-indigo-300 font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <FileText className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+              <span className="truncate">اتفاقية الاستخدام</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                onOpenLegalDrawer('privacy');
+                onCloseMobile();
+              }}
+              className="py-1.5 px-2 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-emerald-300 font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+              <span className="truncate">سياسة الخصوصية</span>
+            </button>
+          </div>
+        )}
+
         <div className="pt-1 flex items-center justify-between text-[11px] text-slate-500">
           <div className="flex items-center gap-2">
             <img
@@ -453,74 +505,42 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       )}
 
-      {/* Mobile Bottom Navigation Bar (Fixed Bottom Bar for Phones & Tablets < lg) */}
-      <nav
-        aria-label="قائمة التنقل السفلية للهاتف"
-        className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 shadow-[0_-8px_24px_rgba(2,6,23,0.45)] px-1 pt-1.5 pb-[max(0.4rem,env(safe-area-inset-bottom))]"
-      >
-        <div className="grid grid-cols-8 gap-0.5 max-w-xl mx-auto">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = activeSection === item.id;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => handleSelect(item.id)}
-                className={`relative flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition-all select-none ${
-                  isActive
-                    ? 'text-indigo-400 bg-indigo-600/12 font-bold'
-                    : 'text-slate-400 hover:text-slate-200 active:scale-95'
-                }`}
-              >
-                {/* Top Active Indicator Pill */}
-                {isActive && (
-                  <span className="absolute top-0 inset-x-3 h-0.5 rounded-full bg-indigo-500" />
-                )}
-
-                <div className="relative flex items-center justify-center mb-0.5">
-                  <Icon
-                    className={`w-4 h-4 transition-transform ${
-                      isActive ? 'scale-110 text-indigo-400' : ''
-                    }`}
-                  />
-
-                  {/* Live Connection Status Dot on 'connection' tab */}
-                  {item.id === 'connection' && (
-                    <span
-                      className={`absolute -top-0.5 -right-1.5 w-2 h-2 rounded-full ring-2 ring-slate-900 ${
-                        isLiveConnected ? 'bg-emerald-400' : 'bg-amber-400'
-                      }`}
-                    />
-                  )}
-
-                  {/* Unread Alerts Badge on 'alerts' tab */}
-                  {item.id === 'alerts' && unreadAlertsCount > 0 && (
-                    <span className="absolute -top-1.5 -right-2.5 min-w-[15px] h-[15px] px-1 rounded-full bg-rose-500 text-white text-[9px] font-bold font-mono-numbers flex items-center justify-center shadow-xs">
-                      {unreadAlertsCount > 99 ? '99+' : unreadAlertsCount}
-                    </span>
-                  )}
-
-                  {/* Price Drop Opportunities Badge on 'pricing' tab */}
-                  {item.id === 'pricing' && alertProductsCount > 0 && (
-                    <span className="absolute -top-1.5 -right-2.5 min-w-[15px] h-[15px] px-1 rounded-full bg-amber-500 text-slate-950 text-[9px] font-bold font-mono-numbers flex items-center justify-center shadow-xs">
-                      {alertProductsCount > 99 ? '99+' : alertProductsCount}
-                    </span>
-                  )}
-                </div>
-
-                <span
-                  className={`text-[10px] leading-tight truncate max-w-full ${
-                    isActive ? 'text-white font-bold' : 'text-slate-400 font-medium'
+      {/* Mobile Bottom Navigation Bar */}
+      {showMobileBottomBar && (
+        <nav
+          aria-label="قائمة التنقل السفلية للهاتف"
+          className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 shadow-[0_-8px_24px_rgba(2,6,23,0.45)] px-1 pt-1.5 pb-[max(0.4rem,env(safe-area-inset-bottom))]"
+        >
+          <div className="grid grid-cols-8 gap-0.5 max-w-xl mx-auto">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = activeSection === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => handleSelect(item.id)}
+                  className={`relative flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition-all select-none ${
+                    isActive
+                      ? 'text-indigo-400 bg-indigo-600/12 font-bold'
+                      : 'text-slate-400 hover:text-slate-200 active:scale-95'
                   }`}
                 >
-                  {item.shortLabel}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </nav>
+                  {isActive && (
+                    <span className="absolute top-0 inset-x-3 h-0.5 rounded-full bg-indigo-500" />
+                  )}
+                  <div className="relative flex items-center justify-center mb-0.5">
+                    <Icon className={`w-4 h-4 transition-transform ${isActive ? 'scale-110 text-indigo-400' : ''}`} />
+                  </div>
+                  <span className={`text-[10px] leading-tight truncate max-w-full ${isActive ? 'text-white font-bold' : 'text-slate-400 font-medium'}`}>
+                    {item.shortLabel}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </nav>
+      )}
     </>
   );
 };

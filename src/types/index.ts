@@ -165,6 +165,8 @@ export interface AlertRuleConfig {
   telegramChatId: string;
   telegramNotifyOnCostDrop: boolean;
   telegramNotifyOnNewOrAvailableProducts: boolean;
+  telegramFormat?: 'brief' | 'detailed';
+  telegramInteractiveButtons?: boolean;
 }
 
 export interface SyncScheduleConfig {
@@ -206,4 +208,16 @@ export interface UserAccountProfile {
   notes: string;
   createdAt?: any;
   updatedAt?: any;
+}
+
+export interface ProviderOrderRecord {
+  id: string | number;
+  productId: string | number;
+  productName: string;
+  quantity: number;
+  totalCostUsd: number;
+  status: 'completed' | 'pending' | 'failed' | 'processing';
+  createdAt: string;
+  recipientInfo?: string;
+  providerReference?: string;
 }

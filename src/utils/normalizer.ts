@@ -704,3 +704,30 @@ export function exportProductsToCsv(products: CatalogProduct[]): void {
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
 }
+
+/**
+ * Calculates days remaining until subscription expiration date (YYYY-MM-DD)
+ */
+export function getSubscriptionDaysRemaining(subscriptionEndsAt?: string): {
+  daysRemaining: number | null;
+  isExpiringSoon: boolean;
+  isExpired: boolean;
+} {
+  if (!subscriptionEndsAt || !subscriptionEndsAt.includes('-')) {
+    return { daysRemaining: null, isExpiringSoon: false, isExpired: false };
+  }
+  const parts = subscriptionEndsAt.split('-');
+  if (parts.length !== 3) return { daysRemaining: null, isExpiringSoon: false, isExpired: false };
+  const endDate = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  endDate.setHours(0, 0, 0, 0);
+  const diffTime = endDate.getTime() - today.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+  return {
+    daysRemaining: diffDays,
+    isExpiringSoon: diffDays >= 0 && diffDays <= 3,
+    isExpired: diffDays < 0,
+  };
+}

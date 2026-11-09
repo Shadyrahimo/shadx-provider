@@ -14,6 +14,10 @@ import { DeploymentGuideModal } from './components/DeploymentGuideModal';
 import { DualComparisonView } from './components/DualComparisonView';
 import { AuthGateView } from './components/AuthGateView';
 import { AdminAccountsView } from './components/AdminAccountsView';
+import { TermsDrawer, LegalTabType } from './components/TermsDrawer';
+import { BulkCartModal } from './components/BulkCartModal';
+import { SettingsSection } from './components/SettingsSection';
+import { OrdersHistoryView } from './components/OrdersHistoryView';
 import {
   onAuthStateChanged,
   signInWithPopup,
@@ -54,12 +58,14 @@ import {
   PriceHistoryPoint,
   UserAccountProfile,
   SubscriptionPlanTier,
+  ProviderOrderRecord,
 } from './types';
 import { PROVIDER_PRESETS } from './data/mockCatalog';
 import {
   transformRawProduct,
   exportProductsToCsv,
   buildBackendUrl,
+  getSubscriptionDaysRemaining,
 } from './utils/normalizer';
 import {
   getDesktopNotificationPermission,
@@ -85,6 +91,8 @@ import {
   Globe,
   KeyRound,
   RefreshCw,
+  ShieldCheck,
+  Cpu,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -126,6 +134,21 @@ export default function App() {
   const [authError, setAuthError] = useState<string | null>(null);
   const [currentUserProfile, setCurrentUserProfile] = useState<UserAccountProfile | null>(null);
   const [allAccounts, setAllAccounts] = useState<UserAccountProfile[]>([]);
+  const [isTermsDrawerOpen, setIsTermsDrawerOpen] = useState<boolean>(false);
+  const [termsDrawerTab, setTermsDrawerTab] = useState<LegalTabType>('terms');
+  const [isBulkCartOpen, setIsBulkCartOpen] = useState<boolean>(false);
+  const [isDeveloperMode, setIsDeveloperMode] = useState<boolean>(
+    () => localStorage.getItem('shadx_developer_mode') === 'true'
+  );
+
+  useEffect(() => {
+    localStorage.setItem('shadx_developer_mode', String(isDeveloperMode));
+  }, [isDeveloperMode]);
+
+  const handleOpenLegalDrawer = useCallback((tab: LegalTabType) => {
+    setTermsDrawerTab(tab);
+    setIsTermsDrawerOpen(true);
+  }, []);
   const pendingRegistrationDraftRef = useRef<{
     displayName: string;
     storeName: string;
@@ -278,6 +301,25 @@ export default function App() {
     );
     return () => unsubscribe();
   }, [isAuthReady, firebaseUser]);
+
+  // Automated subscription expiration check & email warning simulation
+  useEffect(() => {
+    if (!currentUserProfile?.subscriptionEndsAt) return;
+    const { isExpiringSoon, isExpired, daysRemaining } = getSubscriptionDaysRemaining(
+      currentUserProfile.subscriptionEndsAt
+    );
+    if (isExpiringSoon || isExpired) {
+      console.log('----------------------------------------------------');
+      console.log(`[SUBSCRIPTION EXPIRATION WARNING EMAIL] To: ${currentUserProfile.email}`);
+      console.log(
+        `[SUBSCRIPTION EXPIRATION WARNING EMAIL] Store: ${currentUserProfile.storeName} | Days Remaining: ${daysRemaining}`
+      );
+      console.log(
+        `[SUBSCRIPTION EXPIRATION WARNING EMAIL] Status: WARNING EMAIL SENT & DELIVERED SUCCESSFULLY`
+      );
+      console.log('----------------------------------------------------');
+    }
+  }, [currentUserProfile]);
 
   // 3. Real-time listener on all accounts (/users) when signed in via Firebase as Bootstrapped Owner
   useEffect(() => {
@@ -556,6 +598,59 @@ export default function App() {
   const [activeSection, setActiveSection] = useState<ActiveSectionId>('catalog');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false);
   const [showConnectionToken, setShowConnectionToken] = useState<boolean>(false);
+  const [showMobileBottomBar, setShowMobileBottomBar] = useState<boolean>(() => {
+    return localStorage.getItem('shadx_show_mobile_bottom_bar') !== 'false';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('shadx_show_mobile_bottom_bar', String(showMobileBottomBar));
+  }, [showMobileBottomBar]);
+
+  // Order History State
+  const [ordersHistory, setOrdersHistory] = useState<ProviderOrderRecord[]>([]);
+  const [isFetchingOrders, setIsFetchingOrders] = useState<boolean>(false);
+
+  const handleFetchOrdersHistory = async () => {
+    if (!baseUrl.trim() || !apiToken.trim()) {
+      setNotification({
+        text: 'يرجى إدخال رابط المزود ورمز التوثيق (API Token) أولاً لجلب سجل الطلبات.',
+        type: 'error',
+      });
+      return;
+    }
+
+    setIsFetchingOrders(true);
+    try {
+      const res = await fetch(buildBackendUrl('/api/proxy/orders'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ baseUrl, apiToken }),
+      });
+      const data = await res.json();
+      if (data.success && Array.isArray(data.orders)) {
+        setOrdersHistory(data.orders);
+        setNotification({
+          text: `تم بنجاح جلب وتحديث سجل الطلبات (${data.orders.length} طلب) من المزود.`,
+          type: 'success',
+        });
+      } else {
+        throw new Error(data.error || 'تعذر جلب الطلبات');
+      }
+    } catch (err: any) {
+      setNotification({
+        text: `فشل جلب سجل الطلبات: ${err.message}`,
+        type: 'error',
+      });
+    } finally {
+      setIsFetchingOrders(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isLiveConnected && baseUrl && apiToken && ordersHistory.length === 0) {
+      handleFetchOrdersHistory();
+    }
+  }, [isLiveConnected, baseUrl, apiToken]);
 
   // Modals & Drawers
   const [activeModalProduct, setActiveModalProduct] = useState<CatalogProduct | null>(null);
@@ -603,6 +698,8 @@ export default function App() {
       telegramChatId: '',
       telegramNotifyOnCostDrop: true,
       telegramNotifyOnNewOrAvailableProducts: true,
+      telegramFormat: 'detailed',
+      telegramInteractiveButtons: true,
     };
     try {
       const saved = localStorage.getItem('shadx_alert_rules');
@@ -786,6 +883,9 @@ export default function App() {
       body: JSON.stringify({
         botToken: alertRuleConfig.telegramBotToken,
         chatId: alertRuleConfig.telegramChatId,
+        format: alertRuleConfig.telegramFormat || 'detailed',
+        includeButtons: alertRuleConfig.telegramInteractiveButtons ?? true,
+        appUrl: typeof window !== 'undefined' ? window.location.origin : '',
         ...payload,
         isTest: false,
       }),
@@ -1714,25 +1814,91 @@ export default function App() {
     });
   };
 
+  // Loading timeout state & smooth fade-out transition state
+  const [loadingTimedOut, setLoadingTimedOut] = useState(false);
+  const [isFadingOut, setIsFadingOut] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!isAuthReady) {
+        setLoadingTimedOut(true);
+      }
+    }, 15000);
+    return () => clearTimeout(timer);
+  }, [isAuthReady]);
+
+  useEffect(() => {
+    if (isAuthReady) {
+      setIsFadingOut(true);
+    }
+  }, [isAuthReady]);
+
   // Show loading screen while Firebase Auth state initializes
-  if (!isAuthReady) {
+  if (!isAuthReady || isFadingOut) {
     return (
       <div
-        className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-6 font-sans"
+        className={`min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-6 font-sans relative overflow-hidden select-none transition-opacity duration-700 ease-in-out ${
+          isFadingOut ? 'opacity-0 pointer-events-none' : 'opacity-100'
+        }`}
         dir="rtl"
       >
-        <div className="w-12 h-12 rounded-2xl bg-indigo-600/20 border border-indigo-500/40 flex items-center justify-center text-indigo-400 mb-3">
-          <RefreshCw className="w-6 h-6 animate-spin" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-indigo-950/40 via-slate-950 to-slate-950 pointer-events-none" />
+
+        <div className="relative z-10 flex flex-col items-center max-w-sm text-center space-y-5">
+          {/* Smoothly Spinning Tech Hub Icon */}
+          <div className="relative">
+            <div className="absolute -inset-3 bg-gradient-to-r from-indigo-500 via-purple-500 to-violet-500 rounded-full blur-lg opacity-50 animate-pulse" />
+            <div className="relative w-20 h-20 rounded-2xl bg-slate-900 border border-indigo-500/50 flex items-center justify-center text-indigo-400 shadow-2xl">
+              <Cpu className="w-10 h-10 animate-spin text-indigo-400" style={{ animationDuration: '6s' }} />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <h3 className="text-base font-extrabold text-white tracking-wide">
+              ShadX-Provider Hub
+            </h3>
+            <p className="text-xs font-bold text-indigo-300 tracking-wide">
+              بيئة آمنة، موثوقة، وفعّالة
+            </p>
+          </div>
+
+          {loadingTimedOut ? (
+            <div className="space-y-3 pt-2">
+              <p className="text-[11px] text-amber-300">
+                استغرقت عملية التحقق وقتاً أطول من المتوقع. يمكنك إعادة المحاولة:
+              </p>
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-colors shadow-sm cursor-pointer"
+              >
+                إعادة المحاولة (Retry)
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 pt-2">
+              <div className="w-2 h-2 rounded-full bg-indigo-500 animate-ping" />
+              <span className="text-[11px] text-slate-400 font-mono">جارِ مزامنة الجلسة وصلاحيات الحساب...</span>
+            </div>
+          )}
         </div>
-        <p className="text-xs font-bold text-slate-300">
-          جارِ التحقق من جلسة الدخول وصلاحيات الحساب...
-        </p>
       </div>
     );
   }
 
-  // Gate the entire platform behind Authentication & Owner Approval
-  if (!currentUserProfile || currentUserProfile.accountStatus !== 'active') {
+  // Gate the entire platform behind Authentication, Active Status, and Active Paid Subscription Plan (or Owner Admin)
+  const isOwnerAdmin =
+    currentUserProfile?.role === 'owner' || currentUserProfile?.email === OWNER_EMAIL;
+  const hasActivePaidPlan =
+    currentUserProfile &&
+    currentUserProfile.accountStatus === 'active' &&
+    ['starter', 'pro', 'enterprise'].includes(currentUserProfile.planTier);
+
+  if (
+    !currentUserProfile ||
+    currentUserProfile.accountStatus !== 'active' ||
+    (!hasActivePaidPlan && !isOwnerAdmin)
+  ) {
     return (
       <AuthGateView
         currentUserProfile={currentUserProfile}
@@ -1771,6 +1937,8 @@ export default function App() {
         currentUserProfile={currentUserProfile}
         pendingAccountsCount={pendingAccountsCount}
         onSignOut={handleSignOutUser}
+        onOpenLegalDrawer={handleOpenLegalDrawer}
+        showMobileBottomBar={showMobileBottomBar}
       />
 
       {/* Main Content Column */}
@@ -1837,6 +2005,41 @@ export default function App() {
           {/* SECTION 1: CATALOG & PRODUCTS */}
           {activeSection === 'catalog' && (
             <div>
+              {/* Subscription Expiration Warning Banner */}
+              {currentUserProfile && (() => {
+                const { daysRemaining, isExpiringSoon, isExpired } = getSubscriptionDaysRemaining(
+                  currentUserProfile.subscriptionEndsAt
+                );
+                if (isExpiringSoon || isExpired) {
+                  return (
+                    <div className="bg-amber-950/90 border border-amber-500/60 rounded-xl p-3.5 sm:p-4 text-xs sm:text-sm text-amber-200 flex flex-wrap items-center justify-between gap-3 shadow-lg mb-4">
+                      <div className="flex items-center gap-2.5">
+                        <AlertCircle className="w-5 h-5 text-amber-400 shrink-0" />
+                        <div>
+                          <strong className="block text-amber-100 font-bold">
+                            {isExpired
+                              ? '⚠️ تنبيه: انتهت صلاحية اشتراكك في المنصة!'
+                              : `⚠️ تنبيه هام: اشتراكك ينتهي قريباً (متبقي ${daysRemaining} أيام)`}
+                          </strong>
+                          <span className="text-xs text-amber-300">
+                            تاريخ انتهاء الاشتراك: <strong>{currentUserProfile.subscriptionEndsAt}</strong>. يرجى التواصل مع إدارة المنصة لتجديد الاشتراك أو ترقية الباقة لضمان استمرار عمل المتجر بدون انقطاع.
+                          </span>
+                        </div>
+                      </div>
+                      <a
+                        href="https://wa.me/?text=مرحباً، أرغب في تجديد اشتراكي في منصة ShadX-Provider متجري: "
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition-colors shrink-0 shadow-xs"
+                      >
+                        تواصل لتجديد الاشتراك الآن
+                      </a>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+
               {/* Quick KPI Strip */}
               <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2.5 sm:gap-3.5 mb-4 text-xs">
                 <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 flex items-center gap-3 shadow-2xs">
@@ -2094,6 +2297,7 @@ export default function App() {
                 isAllSelected={isAllSelected}
                 alertProductsCount={alertProductsCount}
                 lowMarginProductsCount={lowMarginProductsCount}
+                onOpenBulkCart={() => setIsBulkCartOpen(true)}
               />
 
               {/* Responsive Product Table & Cards */}
@@ -2113,6 +2317,8 @@ export default function App() {
                   setFocusedCompareProductId(prod.id);
                   setActiveSection('compare');
                 }}
+                isDeveloperMode={isDeveloperMode}
+                onRefresh={handleFetchProducts}
               />
 
               {/* Pagination & Density Controls */}
@@ -2234,6 +2440,8 @@ export default function App() {
               }}
               onSignOut={handleSignOutUser}
               onNotify={(text, type) => setNotification({ text, type })}
+              isDeveloperMode={isDeveloperMode}
+              onToggleDeveloperMode={setIsDeveloperMode}
             />
           )}
 
@@ -2457,8 +2665,90 @@ export default function App() {
               onClose={() => {}}
             />
           )}
+
+          {/* SECTION 7: UNIFIED SETTINGS SECTION */}
+          {activeSection === 'settings' && (
+            <SettingsSection
+              baseUrl={baseUrl}
+              setBaseUrl={setBaseUrl}
+              apiToken={apiToken}
+              setApiToken={setApiToken}
+              selectedPreset={selectedPreset}
+              onSelectPreset={handleSelectPreset}
+              syncConfig={syncConfig}
+              onUpdateSyncConfig={setSyncConfig}
+              ruleConfig={alertRuleConfig}
+              onUpdateRuleConfig={setAlertRuleConfig}
+              marginConfig={marginConfig}
+              onUpdateMarginConfig={setMarginConfig}
+              thresholdConfig={thresholdConfig}
+              onUpdateThresholdConfig={setThresholdConfig}
+              themeMode={themeMode}
+              resolvedTheme={resolvedTheme}
+              onChangeThemeMode={setThemeMode}
+              isDeveloperMode={isDeveloperMode}
+              onToggleDeveloperMode={setIsDeveloperMode}
+              showMobileBottomBar={showMobileBottomBar}
+              onToggleMobileBottomBar={setShowMobileBottomBar}
+              onTriggerSyncNow={handleFetchProducts}
+              onNotify={(text, type) => setNotification({ text, type })}
+            />
+          )}
+
+          {/* SECTION 8: ORDERS HISTORY VIEW */}
+          {activeSection === 'orders' && (
+            <OrdersHistoryView
+              orders={ordersHistory}
+              isFetching={isFetchingOrders}
+              onRefreshOrders={handleFetchOrdersHistory}
+              providerBaseUrl={baseUrl}
+            />
+          )}
         </main>
+
+        {/* Main Application Footer with Terms & Privacy Links */}
+        <footer className="border-t border-slate-800/80 bg-slate-900/60 py-3.5 px-4 sm:px-6 lg:px-8 text-xs text-slate-400">
+          <div className="max-w-[1600px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
+            <span>جميع الحقوق محفوظة © ShadX-Provider Hub • نظام إدارة ومقارنة مزودي البطاقات الرقمية</span>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => handleOpenLegalDrawer('terms')}
+                className="text-slate-300 hover:text-indigo-300 font-bold underline underline-offset-4 transition-colors cursor-pointer"
+              >
+                اتفاقية الاستخدام
+              </button>
+              <span className="text-slate-700">•</span>
+              <button
+                type="button"
+                onClick={() => handleOpenLegalDrawer('privacy')}
+                className="text-slate-300 hover:text-emerald-300 font-bold underline underline-offset-4 transition-colors cursor-pointer"
+              >
+                سياسة الخصوصية وأمن البيانات
+              </button>
+            </div>
+          </div>
+        </footer>
       </div>
+
+      {/* Terms of Use & Privacy Policy Drawer */}
+      <TermsDrawer
+        isOpen={isTermsDrawerOpen}
+        onClose={() => setIsTermsDrawerOpen(false)}
+        initialTab={termsDrawerTab}
+      />
+
+      {/* Automated Bulk Order Cart Modal */}
+      <BulkCartModal
+        isOpen={isBulkCartOpen}
+        onClose={() => setIsBulkCartOpen(false)}
+        selectedProducts={catalogProducts.filter((p) => selectedIds.has(p.id))}
+        allProducts={catalogProducts}
+        providerBaseUrl={baseUrl}
+        apiToken={apiToken}
+        onNotify={(text, type) => setNotification({ text, type })}
+        onClearSelection={() => setSelectedIds(new Set())}
+      />
 
       {/* Integration & Request Simulator Modal (Opens when clicking a product) */}
       <ProductDetailModal

@@ -30,6 +30,7 @@ import {
   Globe,
   ChevronDown,
   ChevronUp,
+  FileText,
 } from 'lucide-react';
 import {
   SubscriptionPlanTier,
@@ -38,6 +39,8 @@ import {
 } from '../types';
 import { ACCOUNT_CONSTRAINTS, sanitizeString } from '../firebase';
 import firebaseConfig from '../../firebase-applet-config.json';
+import { TermsDrawer, LegalTabType } from './TermsDrawer';
+import { GoogleSetupGuideModal } from './GoogleSetupGuideModal';
 
 interface AuthGateViewProps {
   currentUserProfile: UserAccountProfile | null;
@@ -192,6 +195,16 @@ export const AuthGateView: React.FC<AuthGateViewProps> = ({
   // Firebase Authorized Domains Helper State (for auth/unauthorized-domain)
   const [showDomainHelper, setShowDomainHelper] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  // Terms & Privacy Policy Drawer State
+  const [isTermsDrawerOpen, setIsTermsDrawerOpen] = useState(false);
+  const [termsDrawerTab, setTermsDrawerTab] = useState<LegalTabType>('terms');
+  const [isGoogleGuideOpen, setIsGoogleGuideOpen] = useState(false);
+
+  const handleOpenLegalDrawer = (tab: LegalTabType) => {
+    setTermsDrawerTab(tab);
+    setIsTermsDrawerOpen(true);
+  };
 
   const currentHostname =
     typeof window !== 'undefined' && window.location.hostname
@@ -366,12 +379,12 @@ export const AuthGateView: React.FC<AuthGateViewProps> = ({
                 <h1 className="text-base sm:text-lg font-extrabold text-white">
                   {isSuspended
                     ? 'تم إيقاف الحساب مؤقتاً'
-                    : 'حسابك قيد المراجعة والتفعيل'}
+                    : 'تواصل مع المدير لتفعيل الحساب'}
                 </h1>
                 <p className="text-xs text-slate-400 mt-0.5">
                   {isSuspended
                     ? 'يرجى التواصل مع إدارة المنصة لإعادة تفعيل الحساب.'
-                    : 'تم استلام طلب تسجيل حسابك بنجاح وبانتظار تفعيله من إدارة المنصة.'}
+                    : 'تم استلام طلبك بنجاح، يرجى التواصل مع المدير المالك لتفعيل اشتراكك ومنحك صلاحية الوصول لكتالوج المنتجات ومقارنة الأسعار.'}
                 </p>
               </div>
             </div>
@@ -474,7 +487,35 @@ export const AuthGateView: React.FC<AuthGateViewProps> = ({
               </div>
             </form>
           )}
+
+          {/* Legal links inside Pending / Suspended view */}
+          <div className="pt-3 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400">
+            <span>الوثائق القانونية المعتمدة للمنصة:</span>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => handleOpenLegalDrawer('terms')}
+                className="text-indigo-400 hover:text-indigo-300 font-bold underline underline-offset-4 cursor-pointer"
+              >
+                اتفاقية الاستخدام
+              </button>
+              <span className="text-slate-700">•</span>
+              <button
+                type="button"
+                onClick={() => handleOpenLegalDrawer('privacy')}
+                className="text-emerald-400 hover:text-emerald-300 font-bold underline underline-offset-4 cursor-pointer"
+              >
+                سياسة الخصوصية
+              </button>
+            </div>
+          </div>
         </div>
+
+        <TermsDrawer
+          isOpen={isTermsDrawerOpen}
+          onClose={() => setIsTermsDrawerOpen(false)}
+          initialTab={termsDrawerTab}
+        />
       </div>
     );
   }
@@ -685,185 +726,45 @@ export const AuthGateView: React.FC<AuthGateViewProps> = ({
                   </div>
 
                   {/* Prominent Primary Login Buttons Block */}
-                  <div className="pt-1 space-y-2.5">
-                    <button
-                      type="submit"
-                      disabled={isSigningIn}
-                      className="w-full py-3.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all shadow-lg shadow-indigo-600/25 disabled:opacity-50 cursor-pointer"
-                    >
-                      {isSigningIn ? (
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <LogIn className="w-4 h-4" />
-                      )}
-                      <span>
-                        {isSigningIn ? 'جارِ تسجيل الدخول...' : 'تسجيل الدخول إلى المنصة'}
-                      </span>
-                    </button>
-
+                  <div className="pt-2 space-y-3">
                     <button
                       type="button"
                       onClick={() => onGoogleAuth()}
                       disabled={isSigningIn}
-                      className="w-full py-3 px-4 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-slate-200 font-bold text-xs flex items-center justify-center gap-2 transition-all disabled:opacity-50 cursor-pointer"
+                      className="w-full py-4 px-5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-extrabold text-sm sm:text-base flex items-center justify-center gap-2.5 transition-all shadow-xl shadow-indigo-600/30 disabled:opacity-50 cursor-pointer"
                     >
-                      <ShieldCheck className="w-4 h-4 text-indigo-400" />
+                      <ShieldCheck className="w-5 h-5 text-white" />
                       <span>الدخول السريع باستخدام حساب Google</span>
                     </button>
 
-                    {/* Toggle Button for Firebase Authorized Domains Helper */}
-                    <div className="pt-1">
+                    <button
+                      type="submit"
+                      disabled={isSigningIn}
+                      className="w-full py-3.5 px-4 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-700 text-slate-100 font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-50 cursor-pointer"
+                    >
+                      {isSigningIn ? (
+                        <RefreshCw className="w-4 h-4 animate-spin text-indigo-400" />
+                      ) : (
+                        <LogIn className="w-4 h-4 text-indigo-400" />
+                      )}
+                      <span>
+                        {isSigningIn ? 'جارِ تسجيل الدخول...' : 'تسجيل الدخول عبر البريد الإلكتروني'}
+                      </span>
+                    </button>
+
+                    {/* Smooth Warning Banner for Google Setup Guide */}
+                    <div className="mt-3 p-3 rounded-xl bg-indigo-950/40 border border-indigo-500/30 text-indigo-200 text-[11px] flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Globe className="w-4 h-4 text-indigo-400 shrink-0" />
+                        <span className="truncate">تنبيه: لتفعيل الدخول بجوجل بسلاسة، راجع خطوات تفعيل النطاق.</span>
+                      </div>
                       <button
                         type="button"
-                        onClick={() => setShowDomainHelper((prev) => !prev)}
-                        className="w-full py-2 px-3 rounded-xl bg-slate-950/70 hover:bg-slate-900 border border-slate-800/80 text-slate-400 hover:text-indigo-300 text-[11px] font-bold flex items-center justify-between gap-2 transition-colors cursor-pointer"
+                        onClick={() => setIsGoogleGuideOpen(true)}
+                        className="text-white bg-indigo-600 hover:bg-indigo-500 font-bold px-2.5 py-1 rounded-lg shrink-0 transition-colors cursor-pointer text-[10px]"
                       >
-                        <span className="flex items-center gap-1.5">
-                          <Globe className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                          <span>
-                            حل خطأ (auth/unauthorized-domain) لتفعيل دخول Google
-                          </span>
-                        </span>
-                        {showDomainHelper ? (
-                          <ChevronUp className="w-3.5 h-3.5 shrink-0" />
-                        ) : (
-                          <ChevronDown className="w-3.5 h-3.5 shrink-0" />
-                        )}
+                        عرض الدليل
                       </button>
-
-                      {showDomainHelper && (
-                        <div className="mt-2.5 p-3.5 rounded-xl bg-slate-950 border border-indigo-500/40 space-y-3 text-[11px] text-slate-300 leading-relaxed">
-                          <div className="flex items-start justify-between gap-2 border-b border-slate-800 pb-2.5">
-                            <div>
-                              <h4 className="font-extrabold text-indigo-300 text-xs flex items-center gap-1.5">
-                                <Globe className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                                <span>إضافة نطاق المشروع في Firebase Authentication</span>
-                              </h4>
-                              <p className="text-[11px] text-slate-400 mt-0.5">
-                                لكي يعمل تسجيل الدخول عبر Google بدون خطأ{' '}
-                                <code className="text-rose-300 font-mono-numbers">
-                                  auth/unauthorized-domain
-                                </code>
-                                ، انسخ النطاق الفرعي أدناه وأضفه في إعدادات مشروعك (
-                                <code className="text-emerald-300 font-mono-numbers">
-                                  {firebaseProjectId}
-                                </code>
-                                ):
-                              </p>
-                            </div>
-                          </div>
-
-                          {/* Step-by-Step Instructions */}
-                          <ol className="list-decimal list-inside space-y-1 text-slate-300">
-                            <li>
-                              افتح صفحة{' '}
-                              <strong className="text-white">
-                                Authentication &gt; Settings &gt; Authorized domains
-                              </strong>{' '}
-                              من الزر المباشر أدناه.
-                            </li>
-                            <li>
-                              اضغط على زر{' '}
-                              <strong className="text-emerald-300">Add domain</strong> (إضافة نطاق).
-                            </li>
-                            <li>
-                              انسخ النطاق أدناه (بدون{' '}
-                              <code className="font-mono-numbers text-slate-400">https://</code>)
-                              والصقه ثم اضغط <strong className="text-white">Add</strong>.
-                            </li>
-                          </ol>
-
-                          {/* Domains List with One-Click Copy */}
-                          <div className="space-y-2">
-                            {recommendedDomains.map((item, idx) => {
-                              const copyId = `domain_${idx}`;
-                              const isCopied = copiedKey === copyId;
-                              return (
-                                <div
-                                  key={item.host}
-                                  className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 flex flex-col gap-1.5"
-                                >
-                                  <div className="flex items-center justify-between gap-2">
-                                    <span className="text-[10px] font-bold text-slate-400">
-                                      {item.label}
-                                    </span>
-                                    {item.isCurrent && (
-                                      <span className="px-2 py-0.5 rounded bg-emerald-950/90 border border-emerald-500/30 text-emerald-300 text-[10px] font-bold">
-                                        النطاق الحالي النشط
-                                      </span>
-                                    )}
-                                  </div>
-                                  <div className="flex items-center justify-between gap-2">
-                                    <code
-                                      dir="ltr"
-                                      className="font-mono-numbers text-[11px] font-bold text-indigo-200 bg-slate-950 px-2.5 py-1.5 rounded border border-slate-800 select-all break-all grow text-left"
-                                    >
-                                      {item.host}
-                                    </code>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleCopyText(item.host, copyId)}
-                                      className={`px-2.5 py-1.5 rounded-lg font-bold text-[11px] flex items-center gap-1 shrink-0 transition-colors cursor-pointer ${
-                                        isCopied
-                                          ? 'bg-emerald-600 text-white'
-                                          : 'bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30'
-                                      }`}
-                                    >
-                                      {isCopied ? (
-                                        <>
-                                          <Check className="w-3.5 h-3.5" />
-                                          <span>تم النسخ</span>
-                                        </>
-                                      ) : (
-                                        <>
-                                          <Copy className="w-3.5 h-3.5" />
-                                          <span>نسخ النطاق</span>
-                                        </>
-                                      )}
-                                    </button>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-
-                          {/* Direct Link to Firebase Console Authorized Domains */}
-                          <div className="pt-1 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
-                            <a
-                              href={firebaseConsoleAuthSettingsUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="py-2 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[11px] flex items-center justify-center gap-1.5 transition-colors"
-                            >
-                              <ExternalLink className="w-3.5 h-3.5" />
-                              <span>فتح إعدادات Authorized Domains في Firebase</span>
-                            </a>
-
-                            <button
-                              type="button"
-                              onClick={() =>
-                                handleCopyText(
-                                  `console.log("Firebase Authorized Domain:", window.location.hostname);`,
-                                  'helper_code'
-                                )
-                              }
-                              className="py-2 px-3 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 font-bold text-[11px] flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-                            >
-                              {copiedKey === 'helper_code' ? (
-                                <>
-                                  <Check className="w-3.5 h-3.5 text-emerald-400" />
-                                  <span>تم نسخ الكود المساعد</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Code2 className="w-3.5 h-3.5 text-indigo-400" />
-                                  <span>نسخ كود استخراج النطاق</span>
-                                </>
-                              )}
-                            </button>
-                          </div>
-                        </div>
-                      )}
                     </div>
                   </div>
 
@@ -1002,6 +903,27 @@ export const AuthGateView: React.FC<AuthGateViewProps> = ({
                         className="w-full pl-3 pr-9 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500 font-mono-numbers"
                       />
                     </div>
+                  </div>
+
+                  {/* Legal Agreement Notice before Submit */}
+                  <div className="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800/90 text-[11px] text-slate-400 leading-relaxed">
+                    بإنشائك للحساب، فإنك توافق على{' '}
+                    <button
+                      type="button"
+                      onClick={() => handleOpenLegalDrawer('terms')}
+                      className="text-indigo-400 hover:text-indigo-300 font-bold underline underline-offset-4 cursor-pointer"
+                    >
+                      اتفاقية الاستخدام
+                    </button>{' '}
+                    و{' '}
+                    <button
+                      type="button"
+                      onClick={() => handleOpenLegalDrawer('privacy')}
+                      className="text-emerald-400 hover:text-emerald-300 font-bold underline underline-offset-4 cursor-pointer"
+                    >
+                      سياسة الخصوصية وأمن البيانات
+                    </button>{' '}
+                    الخاصة بالمنصة.
                   </div>
 
                   <button
@@ -1145,13 +1067,49 @@ export const AuthGateView: React.FC<AuthGateViewProps> = ({
         </div>
       </main>
 
-      {/* Clean Footer */}
-      <footer className="border-t border-slate-900 bg-slate-950/80 py-4 px-4 sm:px-6 lg:px-8 text-center sm:text-right">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-slate-500">
-          <span>جميع الحقوق محفوظة © ShadX-Provider Hub • بوابة إدارة مزودي البطاقات الرقمية</span>
-          <span className="font-mono-numbers">Enterprise API Catalog &amp; Price Arbitrage</span>
+      {/* Official Enterprise Footer with Legal Links */}
+      <footer className="border-t border-slate-800/80 bg-slate-900/70 py-4 px-4 sm:px-6 lg:px-8 text-center sm:text-right">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-400">
+          <div className="flex items-center gap-2">
+            <span>جميع الحقوق محفوظة © ShadX-Provider Hub • بوابة إدارة مزودي البطاقات الرقمية</span>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4">
+            <button
+              type="button"
+              onClick={() => handleOpenLegalDrawer('terms')}
+              className="text-slate-300 hover:text-indigo-300 font-bold inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <FileText className="w-3.5 h-3.5 text-indigo-400" />
+              <span>اتفاقية الاستخدام</span>
+            </button>
+
+            <span className="text-slate-700">|</span>
+
+            <button
+              type="button"
+              onClick={() => handleOpenLegalDrawer('privacy')}
+              className="text-slate-300 hover:text-emerald-300 font-bold inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+              <span>سياسة الخصوصية وأمن البيانات</span>
+            </button>
+          </div>
         </div>
       </footer>
+
+      {/* Terms of Use & Privacy Policy Drawer */}
+      <TermsDrawer
+        isOpen={isTermsDrawerOpen}
+        onClose={() => setIsTermsDrawerOpen(false)}
+        initialTab={termsDrawerTab}
+      />
+
+      {/* Google Setup Guide Modal */}
+      <GoogleSetupGuideModal
+        isOpen={isGoogleGuideOpen}
+        onClose={() => setIsGoogleGuideOpen(false)}
+      />
     </div>
   );
 };

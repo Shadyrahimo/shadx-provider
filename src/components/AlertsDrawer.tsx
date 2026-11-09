@@ -264,6 +264,9 @@ export const AlertsDrawer: React.FC<AlertsDrawerProps> = ({
         body: JSON.stringify({
           botToken: ruleConfig.telegramBotToken,
           chatId: ruleConfig.telegramChatId,
+          format: ruleConfig.telegramFormat || 'detailed',
+          includeButtons: ruleConfig.telegramInteractiveButtons ?? true,
+          appUrl: typeof window !== 'undefined' ? window.location.origin : '',
           title: 'اختبار ربط بوت تلجرام - ShadX-Provider',
           productName: 'فحص جاهزية الإشعارات الفورية (انخفاض التكلفة وتوفر المنتجات)',
           productId: 'TG-TEST',
@@ -1021,6 +1024,70 @@ export const AlertsDrawer: React.FC<AlertsDrawerProps> = ({
                             {testTelegramStatus}
                           </div>
                         )}
+
+                        {/* Telegram Format Selection & Interactive Buttons */}
+                        <div className="space-y-2.5 pt-2 border-t border-slate-800/80">
+                          <label className="block text-[11px] font-semibold text-sky-300">
+                            تنسيق وأزرار رسائل تلجرام:
+                          </label>
+
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                onUpdateRuleConfig({
+                                  ...ruleConfig,
+                                  telegramFormat: 'detailed',
+                                })
+                              }
+                              className={`p-2 rounded-xl border text-xs font-semibold transition-all flex items-center justify-center gap-1.5 ${
+                                (ruleConfig.telegramFormat || 'detailed') === 'detailed'
+                                  ? 'bg-sky-600/30 border-sky-500 text-sky-300 shadow-xs'
+                                  : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
+                              }`}
+                            >
+                              <span>📋 تفصيلي (كامل التفاصيل)</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                onUpdateRuleConfig({
+                                  ...ruleConfig,
+                                  telegramFormat: 'brief',
+                                })
+                              }
+                              className={`p-2 rounded-xl border text-xs font-semibold transition-all flex items-center justify-center gap-1.5 ${
+                                ruleConfig.telegramFormat === 'brief'
+                                  ? 'bg-sky-600/30 border-sky-500 text-sky-300 shadow-xs'
+                                  : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
+                              }`}
+                            >
+                              <span>⚡ مختصر (سريع ومباشر)</span>
+                            </button>
+                          </div>
+
+                          <label className="flex items-center justify-between cursor-pointer p-2 rounded-xl bg-slate-950 border border-slate-800 hover:border-slate-700">
+                            <div>
+                              <span className="text-slate-200 font-medium block text-xs">
+                                🔘 إضافة أزرار تفاعلية (Inline Keyboard)
+                              </span>
+                              <span className="text-[10px] text-slate-400">
+                                إرفاق زر "🔗 عرض المنتج في المنصة" أسفل الرسالة لفتح التطبيق مباشرة
+                              </span>
+                            </div>
+                            <input
+                              type="checkbox"
+                              checked={ruleConfig.telegramInteractiveButtons ?? true}
+                              onChange={(e) =>
+                                onUpdateRuleConfig({
+                                  ...ruleConfig,
+                                  telegramInteractiveButtons: e.target.checked,
+                                })
+                              }
+                              className="w-4 h-4 rounded accent-sky-500 cursor-pointer"
+                            />
+                          </label>
+                        </div>
 
                         {/* Event Triggers Selection */}
                         <div className="space-y-2 pt-2 border-t border-slate-800/80">
