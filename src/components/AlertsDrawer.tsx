@@ -25,9 +25,17 @@ import {
   Loader2,
   Target,
   Plus,
+  Monitor,
+  Bell,
 } from 'lucide-react';
 import { AppAlertItem, AlertRuleConfig, AlertType, CatalogProduct } from '../types';
 import { buildBackendUrl } from '../utils/normalizer';
+import {
+  getDesktopNotificationPermission,
+  requestDesktopNotificationPermission,
+  triggerNativeDesktopNotification,
+  DesktopPermissionState,
+} from '../utils/desktopNotifier';
 
 interface AlertsDrawerProps {
   isOpen: boolean;
@@ -69,7 +77,60 @@ export const AlertsDrawer: React.FC<AlertsDrawerProps> = ({
   const [isSendingTestTelegram, setIsSendingTestTelegram] = useState<boolean>(false);
   const [testTelegramStatus, setTestTelegramStatus] = useState<string | null>(null);
   const [showTelegramToken, setShowTelegramToken] = useState<boolean>(false);
+  const [desktopPermission, setDesktopPermission] = useState<DesktopPermissionState>(() =>
+    getDesktopNotificationPermission()
+  );
+  const [testDesktopStatus, setTestDesktopStatus] = useState<string | null>(null);
   const [selectedProductIdToAdd, setSelectedProductIdToAdd] = useState<string | number | ''>('');
+
+  const handleRequestDesktopPermission = async () => {
+    setTestDesktopStatus(null);
+    const perm = await requestDesktopNotificationPermission();
+    setDesktopPermission(perm);
+    if (perm === 'granted') {
+      onUpdateRuleConfig({
+        ...ruleConfig,
+        desktopNotificationsEnabled: true,
+      });
+      setTestDesktopStatus('✅ تم منح صلاحية إشعارات المتصفح وتفعيل إشعارات النظام بنجاح.');
+    } else if (perm === 'denied') {
+      setTestDesktopStatus(
+        '⚠️ تم حظر الإشعارات من المتصفح. يرجى السماح بالإشعارات من أيقونة القفل بجانب رابط الموقع في شريط العنوان.'
+      );
+    } else if (perm === 'unsupported') {
+      setTestDesktopStatus('⚠️ المتصفح أو النافذة الحالية لا تدعم واجهة Notification API.');
+    }
+  };
+
+  const handleSendTestDesktopNotification = async () => {
+    setTestDesktopStatus(null);
+    let perm = getDesktopNotificationPermission();
+    if (perm === 'default') {
+      perm = await requestDesktopNotificationPermission();
+    }
+    setDesktopPermission(perm);
+
+    if (perm !== 'granted') {
+      setTestDesktopStatus(
+        perm === 'denied'
+          ? '❌ تعذر الإرسال لأن إشعارات المتصفح محظورة (Denied). اسمح بها من إعدادات موقع المتصفح.'
+          : '⚠️ يرجى الموافقة على نافذة صلاحية الإشعارات في المتصفح أولاً.'
+      );
+      return;
+    }
+
+    const sent = triggerNativeDesktopNotification({
+      title: '🔔 اختبار إشعارات النظام - ShadX-Provider',
+      body: 'تعمل إشعارات سطح المكتب الفورية بنجاح! سيصلك تنبيه فوري على نظامك فور حدوث أي تغير في الأسعار أو التوفر.',
+      tag: `shadx-test-desktop-${Date.now()}`,
+    });
+
+    if (sent) {
+      setTestDesktopStatus('✅ تم إطلاق إشعار سطح المكتب الفوري (Native Desktop Notification) بنجاح!');
+    } else {
+      setTestDesktopStatus('❌ تعذر إطلاق إشعار النظام. تأكد من عدم تفعيل وضع عدم الإزعاج في نظام التشغيل.');
+    }
+  };
 
   const handleAddProductToCustomAlert = () => {
     if (!selectedProductIdToAdd) return;
@@ -604,6 +665,101 @@ export const AlertsDrawer: React.FC<AlertsDrawerProps> = ({
                     />
                   </label>
 
+                  {/* Native Browser Desktop Notifications (Notification API) */}
+                  <div className="pt-2.5 mt-1 border-t border-slate-800">
+                    <label className="flex items-center justify-between cursor-pointer p-1.5 rounded hover:bg-slate-900/60">
+                      <div>
+                        <span className="text-slate-100 font-semibold flex items-center gap-1.5">
+                          <Monitor className="w-3.5 h-3.5 text-emerald-400" />
+                          إشعارات النظام وسطح المكتب الفورية (Native Desktop Notifications)
+                        </span>
+                        <span className="text-[11px] text-slate-400">
+                          إرسال إشعار منبثق على مستوى نظام التشغيل عبر واجهة Notification API فور تشغيل أي تنبيه جديد
+                        </span>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={Boolean(ruleConfig.desktopNotificationsEnabled ?? true)}
+                        onChange={async (e) => {
+                          const nextVal = e.target.checked;
+                          onUpdateRuleConfig({
+                            ...ruleConfig,
+                            desktopNotificationsEnabled: nextVal,
+                          });
+                          if (nextVal && getDesktopNotificationPermission() === 'default') {
+                            const perm = await requestDesktopNotificationPermission();
+                            setDesktopPermission(perm);
+                          }
+                        }}
+                        className="w-4 h-4 rounded accent-emerald-500 cursor-pointer"
+                      />
+                    </label>
+
+                    {(ruleConfig.desktopNotificationsEnabled ?? true) && (
+                      <div className="mt-2.5 mr-1 p-3 bg-slate-900 rounded-xl border border-emerald-500/30 space-y-2.5">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[11px] text-slate-300 font-medium">
+                              حالة صلاحية المتصفح:
+                            </span>
+                            {desktopPermission === 'granted' ? (
+                              <span className="text-[10px] bg-emerald-950/80 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-md font-semibold flex items-center gap-1">
+                                <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                                <span>مفعّل ومسموح (Granted)</span>
+                              </span>
+                            ) : desktopPermission === 'denied' ? (
+                              <span className="text-[10px] bg-rose-950/80 text-rose-300 border border-rose-500/40 px-2 py-0.5 rounded-md font-semibold">
+                                محظور من المتصفح (Denied)
+                              </span>
+                            ) : desktopPermission === 'default' ? (
+                              <span className="text-[10px] bg-amber-950/80 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-md font-semibold">
+                                بانتظار منح الصلاحية
+                              </span>
+                            ) : (
+                              <span className="text-[10px] bg-slate-800 text-slate-400 border border-slate-700 px-2 py-0.5 rounded-md">
+                                غير مدعوم في هذه النافذة
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            {desktopPermission !== 'granted' && desktopPermission !== 'unsupported' && (
+                              <button
+                                type="button"
+                                onClick={handleRequestDesktopPermission}
+                                className="px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-medium transition-colors"
+                              >
+                                منح صلاحية الإشعارات
+                              </button>
+                            )}
+
+                            <button
+                              type="button"
+                              onClick={handleSendTestDesktopNotification}
+                              className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium transition-colors flex items-center gap-1"
+                              title="إطلاق إشعار سطح مكتب تجريبي للتأكد من عمل Notification API"
+                            >
+                              <Bell className="w-3.5 h-3.5" />
+                              <span>تجربة إشعار النظام</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {testDesktopStatus && (
+                          <div
+                            className={`text-[11px] p-2 rounded-lg border font-medium ${
+                              testDesktopStatus.startsWith('✅')
+                                ? 'bg-emerald-950/60 border-emerald-500/30 text-emerald-300'
+                                : 'bg-amber-950/60 border-amber-500/30 text-amber-300'
+                            }`}
+                          >
+                            {testDesktopStatus}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
                   {/* Email Notifications for High-Profit Products */}
                   <div className="pt-2.5 mt-1 border-t border-slate-800">
                     <label className="flex items-center justify-between cursor-pointer p-1.5 rounded hover:bg-slate-900/60">
@@ -1039,12 +1195,18 @@ export const AlertsDrawer: React.FC<AlertsDrawerProps> = ({
                     )}
                   </div>
 
-                  {/* Email, Telegram & Profit Tier Badges */}
-                  {(alert.emailSent || alert.telegramSent || alert.isHighProfit) && (
+                  {/* Email, Telegram, Desktop & Profit Tier Badges */}
+                  {(alert.emailSent || alert.telegramSent || alert.desktopSent || alert.isHighProfit) && (
                     <div className="flex flex-wrap items-center gap-1.5 mb-2 text-[10px]">
                       {alert.isHighProfit && (
                         <span className="bg-emerald-950/70 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded font-medium flex items-center gap-1">
                           💎 عالية الربحية (High Margin)
+                        </span>
+                      )}
+                      {alert.desktopSent && (
+                        <span className="bg-emerald-950/70 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded font-medium flex items-center gap-1">
+                          <Monitor className="w-3 h-3 text-emerald-400" />
+                          <span>إشعار نظام فوري (Desktop)</span>
                         </span>
                       )}
                       {alert.emailSent && (

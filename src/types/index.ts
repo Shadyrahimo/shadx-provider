@@ -122,6 +122,7 @@ export interface AppAlertItem {
   emailRecipient?: string;
   telegramSent?: boolean;
   telegramChatId?: string;
+  desktopSent?: boolean;
   isHighProfit?: boolean;
   customPercentageThreshold?: number;
 }
@@ -136,6 +137,8 @@ export interface AlertRuleConfig {
   notifyOnCostDrop: boolean;
   notifyOnCostHike: boolean;
   playSound: boolean;
+  // Native Browser Desktop Notifications (Notification API)
+  desktopNotificationsEnabled: boolean;
   // Email Notifications for High-Profit Products
   emailNotificationsEnabled: boolean;
   recipientEmail: string;

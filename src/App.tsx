@@ -31,6 +31,11 @@ import {
   buildBackendUrl,
 } from './utils/normalizer';
 import {
+  getDesktopNotificationPermission,
+  requestDesktopNotificationPermission,
+  triggerNativeDesktopNotification,
+} from './utils/desktopNotifier';
+import {
   Package,
   Layers,
   Sparkles,
@@ -196,6 +201,7 @@ export default function App() {
       notifyOnCostDrop: true,
       notifyOnCostHike: true,
       playSound: true,
+      desktopNotificationsEnabled: true,
       emailNotificationsEnabled: false,
       recipientEmail: '',
       emailOnHighProfitOnly: true,
@@ -697,6 +703,39 @@ export default function App() {
     });
 
     if (newAlerts.length > 0) {
+      if (alertRuleConfig.desktopNotificationsEnabled ?? true) {
+        const currentPerm = getDesktopNotificationPermission();
+        if (currentPerm === 'granted') {
+          newAlerts.slice(0, 5).forEach((alertItem) => {
+            const sent = triggerNativeDesktopNotification({
+              title: `🔔 ${alertItem.title}`,
+              body: `${alertItem.productName} (#${alertItem.productId})\n${alertItem.message}`,
+              tag: alertItem.id,
+              onClick: () => {
+                setActiveSection('alerts');
+              },
+            });
+            if (sent) {
+              alertItem.desktopSent = true;
+            }
+          });
+        } else if (currentPerm === 'default') {
+          requestDesktopNotificationPermission().then((perm) => {
+            if (perm === 'granted') {
+              const firstAlert = newAlerts[0];
+              triggerNativeDesktopNotification({
+                title: `🔔 ${firstAlert.title}`,
+                body: `${firstAlert.productName} (#${firstAlert.productId})\n${firstAlert.message}`,
+                tag: firstAlert.id,
+                onClick: () => {
+                  setActiveSection('alerts');
+                },
+              });
+            }
+          });
+        }
+      }
+
       setAlerts((prev) => [...newAlerts, ...prev].slice(0, 50));
       setActiveToastAlert(newAlerts[0]);
     }
