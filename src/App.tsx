@@ -22,6 +22,7 @@ import {
   AlertRuleConfig,
   SyncScheduleConfig,
   NormalizedParam,
+  ThemeMode,
 } from './types';
 import { PROVIDER_PRESETS } from './data/mockCatalog';
 import {
@@ -71,6 +72,49 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('shadx_api_token', apiToken);
   }, [apiToken]);
+
+  // Theme Mode ('system' auto-detects OS preference, while 'dark' and 'light' are manual overrides)
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
+    const saved = localStorage.getItem('shadx_theme_mode');
+    if (saved === 'system' || saved === 'dark' || saved === 'light') {
+      return saved;
+    }
+    return 'system';
+  });
+
+  const [systemPrefersDark, setSystemPrefersDark] = useState<boolean>(() => {
+    if (typeof window !== 'undefined' && window.matchMedia) {
+      return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+    return true;
+  });
+
+  // Listen in real-time to OS/Browser color scheme changes
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = (e: MediaQueryListEvent) => {
+      setSystemPrefersDark(e.matches);
+    };
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, []);
+
+  const resolvedTheme: 'dark' | 'light' =
+    themeMode === 'system' ? (systemPrefersDark ? 'dark' : 'light') : themeMode;
+
+  // Apply .dark or .light class on <html> and persist user's themeMode choice
+  useEffect(() => {
+    localStorage.setItem('shadx_theme_mode', themeMode);
+    const root = document.documentElement;
+    if (resolvedTheme === 'light') {
+      root.classList.remove('dark');
+      root.classList.add('light');
+    } else {
+      root.classList.remove('light');
+      root.classList.add('dark');
+    }
+  }, [themeMode, resolvedTheme]);
 
   // Live state & balance
   const [isLiveConnected, setIsLiveConnected] = useState<boolean>(false);
@@ -1156,6 +1200,9 @@ export default function App() {
         marginConfig={marginConfig}
         syncConfig={syncConfig}
         onTriggerSyncNow={handleTriggerManualSync}
+        themeMode={themeMode}
+        resolvedTheme={resolvedTheme}
+        onChangeThemeMode={setThemeMode}
       />
 
       {/* Main Content Column */}
@@ -1182,6 +1229,9 @@ export default function App() {
           alertProductsCount={alertProductsCount}
           unreadAlertsCount={unreadAlertsCount}
           syncConfig={syncConfig}
+          themeMode={themeMode}
+          resolvedTheme={resolvedTheme}
+          onChangeThemeMode={setThemeMode}
         />
 
         {/* Main Viewport */}
@@ -1382,11 +1432,11 @@ export default function App() {
                         <PieChart>
                           <RechartsTooltip
                             contentStyle={{
-                              backgroundColor: '#0f172a',
-                              borderColor: '#334155',
+                              backgroundColor: resolvedTheme === 'light' ? '#ffffff' : '#0f172a',
+                              borderColor: resolvedTheme === 'light' ? '#cbd5e1' : '#334155',
                               borderRadius: '0.5rem',
                               fontSize: '11px',
-                              color: '#f8fafc',
+                              color: resolvedTheme === 'light' ? '#0f172a' : '#f8fafc',
                               direction: 'rtl',
                             }}
                             formatter={(value: any, name?: any) => [`${value} منتج`, name || 'العدد']}

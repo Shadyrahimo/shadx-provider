@@ -11,8 +11,11 @@ import {
   Wallet,
   X,
   ChevronLeft,
+  Monitor,
+  Moon,
+  Sun,
 } from 'lucide-react';
-import { SyncScheduleConfig, MarginConfig } from '../types';
+import { SyncScheduleConfig, MarginConfig, ThemeMode } from '../types';
 
 export type ActiveSectionId =
   | 'catalog'
@@ -35,6 +38,9 @@ interface SidebarProps {
   marginConfig: MarginConfig;
   syncConfig: SyncScheduleConfig;
   onTriggerSyncNow: () => void;
+  themeMode: ThemeMode;
+  resolvedTheme: 'dark' | 'light';
+  onChangeThemeMode: (mode: ThemeMode) => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -50,6 +56,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   marginConfig,
   syncConfig,
   onTriggerSyncNow,
+  themeMode,
+  resolvedTheme,
+  onChangeThemeMode,
 }) => {
   const navItems: {
     id: ActiveSectionId;
@@ -265,17 +274,74 @@ export const Sidebar: React.FC<SidebarProps> = ({
         })}
       </div>
 
-      {/* Sidebar Footer */}
-      <div className="p-3.5 border-t border-slate-800 text-[11px] text-slate-500 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <img
-            src="/assets/aistudio/7_20261107_230645______08f45ae0.png"
-            alt="SX"
-            className="w-4 h-4 object-contain opacity-80"
-          />
-          <span>ShadX-Provider Hub</span>
+      {/* Theme Mode Selector (Auto System / Dark Default / Light) & Footer */}
+      <div className="p-3.5 border-t border-slate-800 space-y-2.5 bg-slate-950/40">
+        <div className="flex items-center justify-between text-[11px]">
+          <span className="text-slate-400 font-medium">مظهر الواجهة:</span>
+          <span className="text-[10px] text-indigo-400 font-medium">
+            {themeMode === 'system'
+              ? `تلقائي (${resolvedTheme === 'dark' ? 'داكن' : 'فاتح'})`
+              : themeMode === 'dark'
+              ? 'السمة الداكنة (يدوي)'
+              : 'السمة الفاتحة (يدوي)'}
+          </span>
         </div>
-        <span className="font-mono-numbers text-slate-400">RTL Responsive</span>
+
+        <div className="grid grid-cols-3 gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 text-[11px]">
+          <button
+            type="button"
+            onClick={() => onChangeThemeMode('system')}
+            className={`flex items-center justify-center gap-1 py-1.5 px-2 rounded-lg font-medium transition-all ${
+              themeMode === 'system'
+                ? 'bg-indigo-600 text-white shadow-xs'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+            title="تبديل تلقائي بين الفاتح والداكن حسب إعدادات نظام التشغيل"
+          >
+            <Monitor className="w-3.5 h-3.5 shrink-0" />
+            <span>تلقائي</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onChangeThemeMode('dark')}
+            className={`flex items-center justify-center gap-1 py-1.5 px-2 rounded-lg font-medium transition-all ${
+              themeMode === 'dark'
+                ? 'bg-indigo-600 text-white shadow-xs'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+            title="الاحتفاظ بالسمة الداكنة الحالية يدوياً"
+          >
+            <Moon className="w-3.5 h-3.5 shrink-0" />
+            <span>داكن</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onChangeThemeMode('light')}
+            className={`flex items-center justify-center gap-1 py-1.5 px-2 rounded-lg font-medium transition-all ${
+              themeMode === 'light'
+                ? 'bg-indigo-600 text-white shadow-xs'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+            title="تفعيل الوضع الفاتح يدوياً"
+          >
+            <Sun className="w-3.5 h-3.5 shrink-0" />
+            <span>فاتح</span>
+          </button>
+        </div>
+
+        <div className="pt-1 flex items-center justify-between text-[11px] text-slate-500">
+          <div className="flex items-center gap-2">
+            <img
+              src="/assets/aistudio/7_20261107_230645______08f45ae0.png"
+              alt="SX"
+              className="w-4 h-4 object-contain opacity-80"
+            />
+            <span>ShadX-Provider Hub</span>
+          </div>
+          <span className="font-mono-numbers text-slate-400">RTL Responsive</span>
+        </div>
       </div>
     </div>
   );

@@ -159,5 +159,8 @@ export interface SyncScheduleConfig {
   secondsRemaining: number;
 }
 
+export type ThemeMode = 'system' | 'dark' | 'light';
+
+
 
 

@@ -3,8 +3,64 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @layer base {
+  html.dark {
+    color-scheme: dark;
+  }
+
+  html.light {
+    color-scheme: light;
+    /* Core Surface & Ink Remapping for Light Mode */
+    --color-slate-950: #f1f5f9;
+    --color-slate-900: #ffffff;
+    --color-slate-800: #e2e8f0;
+    --color-slate-700: #cbd5e1;
+    --color-slate-600: #64748b;
+    --color-slate-500: #475569;
+    --color-slate-400: #334155;
+    --color-slate-300: #1e293b;
+    --color-slate-200: #0f172a;
+    --color-slate-100: #020617;
+
+    /* Semantic Accent Tints & Accessible High-Contrast Text for Light Mode */
+    --color-indigo-950: #eef2ff;
+    --color-indigo-900: #e0e7ff;
+    --color-indigo-400: #4f46e5;
+    --color-indigo-300: #4338ca;
+
+    --color-emerald-950: #ecfdf5;
+    --color-emerald-900: #d1fae5;
+    --color-emerald-400: #059669;
+    --color-emerald-300: #047857;
+
+    --color-amber-950: #fffbeb;
+    --color-amber-900: #fef3c7;
+    --color-amber-400: #d97706;
+    --color-amber-300: #b45309;
+
+    --color-rose-950: #fff1f2;
+    --color-rose-900: #ffe4e6;
+    --color-rose-400: #e11d48;
+    --color-rose-300: #be123c;
+
+    --color-sky-950: #f0f9ff;
+    --color-sky-900: #e0f2fe;
+    --color-sky-400: #0284c7;
+    --color-sky-300: #0369a1;
+
+    --color-violet-950: #f5f3ff;
+    --color-violet-900: #ede9fe;
+    --color-violet-400: #7c3aed;
+    --color-violet-300: #6d28d9;
+
+    --color-cyan-950: #ecfeff;
+    --color-cyan-900: #cffafe;
+    --color-cyan-400: #0891b2;
+    --color-cyan-300: #0e7490;
+  }
+
   body {
     font-family: 'IBM Plex Sans Arabic', system-ui, -apple-system, sans-serif;
+    transition: background-color 0.2s ease, color 0.2s ease;
   }
   
   .font-mono-numbers {
@@ -12,6 +68,48 @@
     font-variant-numeric: tabular-nums slashed-zero;
     font-feature-settings: 'tnum' 1, 'zero' 1;
   }
+}
+
+/* Ensure headings using text-white become deep slate ink in Light Mode, while solid colored buttons keep crisp white text */
+html.light .text-white {
+  color: #0f172a;
+}
+
+html.light :is(
+  .bg-indigo-600,
+  .bg-indigo-500,
+  .bg-indigo-700,
+  .bg-emerald-600,
+  .bg-emerald-500,
+  .bg-amber-600,
+  .bg-amber-500,
+  .bg-rose-600,
+  .bg-rose-500,
+  .bg-sky-600,
+  .bg-sky-500,
+  .bg-violet-600
+).text-white,
+html.light :is(
+  .bg-indigo-600,
+  .bg-indigo-500,
+  .bg-indigo-700,
+  .bg-emerald-600,
+  .bg-emerald-500,
+  .bg-amber-600,
+  .bg-amber-500,
+  .bg-rose-600,
+  .bg-rose-500,
+  .bg-sky-600,
+  .bg-sky-500,
+  .bg-violet-600
+) .text-white {
+  color: #ffffff;
+}
+
+/* Enhance metallic SHADOWX & SX logos on light surfaces */
+html.light img[alt*="SHADOWX"],
+html.light img[alt*="SX"] {
+  filter: drop-shadow(0 1px 2px rgba(15, 23, 42, 0.25)) contrast(1.08);
 }
 
 /* Custom scrollbars for high-density tables */
@@ -22,6 +120,9 @@
 ::-webkit-scrollbar-track {
   background: rgba(15, 23, 42, 0.6);
 }
+html.light ::-webkit-scrollbar-track {
+  background: rgba(226, 232, 240, 0.8);
+}
 ::-webkit-scrollbar-thumb {
   background: rgba(100, 116, 139, 0.4);
   border-radius: 4px;
@@ -29,3 +130,4 @@
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(148, 163, 184, 0.6);
 }
+

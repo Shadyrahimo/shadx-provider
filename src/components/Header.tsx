@@ -8,12 +8,16 @@ import {
   CheckCircle2,
   Menu,
   BellRing,
+  Monitor,
+  Moon,
+  Sun,
 } from 'lucide-react';
 import {
   ProviderPreset,
   MarginConfig,
   PriceThresholdConfig,
   SyncScheduleConfig,
+  ThemeMode,
 } from '../types';
 import { PROVIDER_PRESETS } from '../data/mockCatalog';
 import { ActiveSectionId } from './Sidebar';
@@ -39,6 +43,9 @@ interface HeaderProps {
   alertProductsCount: number;
   unreadAlertsCount: number;
   syncConfig: SyncScheduleConfig;
+  themeMode: ThemeMode;
+  resolvedTheme: 'dark' | 'light';
+  onChangeThemeMode: (mode: ThemeMode) => void;
 }
 
 const SECTION_TITLES: Record<ActiveSectionId, { title: string; subtitle: string }> = {
@@ -85,6 +92,9 @@ export const Header: React.FC<HeaderProps> = ({
   userEmail,
   totalProductsCount,
   unreadAlertsCount,
+  themeMode,
+  resolvedTheme,
+  onChangeThemeMode,
 }) => {
   const [showToken, setShowToken] = useState(false);
   const [showQuickConnect, setShowQuickConnect] = useState(!isLiveConnected);
@@ -159,6 +169,49 @@ export const Header: React.FC<HeaderProps> = ({
               <span>متصل ({totalProductsCount})</span>
             </div>
           ) : null}
+
+          {/* Theme Switcher (System Auto / Dark Current / Light) */}
+          <div className="flex items-center bg-slate-950 border border-slate-800 rounded-xl p-0.5 text-xs">
+            <button
+              type="button"
+              onClick={() => onChangeThemeMode('system')}
+              className={`p-1.5 rounded-lg flex items-center gap-1 transition-all ${
+                themeMode === 'system'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+              title={`تبديل تلقائي حسب النظام (النشط حالياً: ${resolvedTheme === 'dark' ? 'داكن' : 'فاتح'})`}
+            >
+              <Monitor className="w-3.5 h-3.5" />
+              <span className="hidden xl:inline text-[11px] font-medium px-0.5">تلقائي</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onChangeThemeMode('dark')}
+              className={`p-1.5 rounded-lg flex items-center gap-1 transition-all ${
+                themeMode === 'dark'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+              title="السمة الداكنة الحالية (يدوي)"
+            >
+              <Moon className="w-3.5 h-3.5" />
+              <span className="hidden xl:inline text-[11px] font-medium px-0.5">داكن</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onChangeThemeMode('light')}
+              className={`p-1.5 rounded-lg flex items-center gap-1 transition-all ${
+                themeMode === 'light'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+              title="الوضع الفاتح (يدوي)"
+            >
+              <Sun className="w-3.5 h-3.5" />
+              <span className="hidden xl:inline text-[11px] font-medium px-0.5">فاتح</span>
+            </button>
+          </div>
 
           {/* Quick Alerts Shortcut */}
           <button
