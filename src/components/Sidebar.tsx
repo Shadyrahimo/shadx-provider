@@ -63,22 +63,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const navItems: {
     id: ActiveSectionId;
     label: string;
+    shortLabel: string;
     subtitle: string;
     icon: React.FC<{ className?: string }>;
     badge?: string | number;
+    mobileBadge?: string | number;
     badgeColor?: string;
   }[] = [
     {
       id: 'catalog',
       label: 'كتالوج المنتجات',
+      shortLabel: 'الكتالوج',
       subtitle: 'الجدول، الفلترة، التصدير، والربحية',
       icon: Package,
       badge: totalProductsCount > 0 ? totalProductsCount : undefined,
+      mobileBadge: totalProductsCount > 0 ? totalProductsCount : undefined,
       badgeColor: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30',
     },
     {
       id: 'connection',
       label: 'ربط المزود والمزامنة',
+      shortLabel: 'المزود',
       subtitle: 'إعداد الـ API Token والفحص الدوري',
       icon: PlugZap,
       badge: isLiveConnected ? 'متصل' : 'غير متصل',
@@ -89,6 +94,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       id: 'pricing',
       label: 'هامش الربح والحدود',
+      shortLabel: 'الأرباح',
       subtitle: 'قواعد التسعير وتنبيهات انخفاض التكلفة',
       icon: Sliders,
       badge:
@@ -97,6 +103,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           : marginConfig.mode === 'percentage'
           ? `+${marginConfig.value}%`
           : `+$${marginConfig.value}`,
+      mobileBadge: alertProductsCount > 0 ? alertProductsCount : undefined,
       badgeColor:
         alertProductsCount > 0
           ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
@@ -105,20 +112,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       id: 'alerts',
       label: 'سجل وقواعد التنبيهات',
+      shortLabel: 'التنبيهات',
       subtitle: 'رصد الأسعار والتوفر وإشعارات البريد',
       icon: BellRing,
       badge: unreadAlertsCount > 0 ? `${unreadAlertsCount} جديد` : undefined,
+      mobileBadge: unreadAlertsCount > 0 ? unreadAlertsCount : undefined,
       badgeColor: 'bg-rose-500/20 text-rose-300 border-rose-500/40',
     },
     {
       id: 'docs',
       label: 'توثيق الـ API البرمجي',
+      shortLabel: 'التوثيق',
       subtitle: 'نقاط النهاية، المعلمات، ورموز الأخطاء',
       icon: BookOpen,
     },
     {
       id: 'deploy',
       label: 'دليل النشر السحابي',
+      shortLabel: 'النشر',
       subtitle: 'GitHub + Neon + Render + Vercel',
       icon: CloudUpload,
     },
@@ -366,28 +377,73 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       )}
 
-      {/* Mobile Bottom Quick Navigation Bar */}
-      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-slate-900/95 backdrop-blur border-t border-slate-800 px-1 py-1.5 flex items-center justify-around">
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          const isActive = activeSection === item.id;
-          return (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => handleSelect(item.id)}
-              className={`flex flex-col items-center justify-center py-1 px-2 rounded-lg text-[10px] font-medium transition-colors relative ${
-                isActive ? 'text-indigo-400 font-bold' : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Icon className="w-4 h-4 mb-0.5" />
-              <span className="truncate max-w-[60px]">{item.label.split(' ')[0]}</span>
-              {item.id === 'alerts' && unreadAlertsCount > 0 && (
-                <span className="absolute top-0.5 right-2 w-2 h-2 rounded-full bg-rose-500" />
-              )}
-            </button>
-          );
-        })}
+      {/* Mobile Bottom Navigation Bar (Fixed Bottom Bar for Phones & Tablets < lg) */}
+      <nav
+        aria-label="قائمة التنقل السفلية للهاتف"
+        className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 shadow-[0_-8px_24px_rgba(2,6,23,0.45)] px-1.5 pt-1.5 pb-[max(0.4rem,env(safe-area-inset-bottom))]"
+      >
+        <div className="grid grid-cols-6 gap-0.5 max-w-xl mx-auto">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = activeSection === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => handleSelect(item.id)}
+                className={`relative flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition-all select-none ${
+                  isActive
+                    ? 'text-indigo-400 bg-indigo-600/12 font-bold'
+                    : 'text-slate-400 hover:text-slate-200 active:scale-95'
+                }`}
+              >
+                {/* Top Active Indicator Pill */}
+                {isActive && (
+                  <span className="absolute top-0 inset-x-3 h-0.5 rounded-full bg-indigo-500" />
+                )}
+
+                <div className="relative flex items-center justify-center mb-0.5">
+                  <Icon
+                    className={`w-4 h-4 transition-transform ${
+                      isActive ? 'scale-110 text-indigo-400' : ''
+                    }`}
+                  />
+
+                  {/* Live Connection Status Dot on 'connection' tab */}
+                  {item.id === 'connection' && (
+                    <span
+                      className={`absolute -top-0.5 -right-1.5 w-2 h-2 rounded-full ring-2 ring-slate-900 ${
+                        isLiveConnected ? 'bg-emerald-400' : 'bg-amber-400'
+                      }`}
+                    />
+                  )}
+
+                  {/* Unread Alerts Badge on 'alerts' tab */}
+                  {item.id === 'alerts' && unreadAlertsCount > 0 && (
+                    <span className="absolute -top-1.5 -right-2.5 min-w-[15px] h-[15px] px-1 rounded-full bg-rose-500 text-white text-[9px] font-bold font-mono-numbers flex items-center justify-center shadow-xs">
+                      {unreadAlertsCount > 99 ? '99+' : unreadAlertsCount}
+                    </span>
+                  )}
+
+                  {/* Price Drop Opportunities Badge on 'pricing' tab */}
+                  {item.id === 'pricing' && alertProductsCount > 0 && (
+                    <span className="absolute -top-1.5 -right-2.5 min-w-[15px] h-[15px] px-1 rounded-full bg-amber-500 text-slate-950 text-[9px] font-bold font-mono-numbers flex items-center justify-center shadow-xs">
+                      {alertProductsCount > 99 ? '99+' : alertProductsCount}
+                    </span>
+                  )}
+                </div>
+
+                <span
+                  className={`text-[10px] leading-tight truncate max-w-full ${
+                    isActive ? 'text-white font-bold' : 'text-slate-400 font-medium'
+                  }`}
+                >
+                  {item.shortLabel}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </nav>
     </>
   );

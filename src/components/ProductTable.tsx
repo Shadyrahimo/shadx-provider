@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   Copy,
   Check,
@@ -8,6 +8,9 @@ import {
   AlertTriangle,
   LayoutGrid,
   Table as TableIcon,
+  ChevronRight,
+  ChevronLeft,
+  MoveHorizontal,
 } from 'lucide-react';
 import { CatalogProduct, NormalizedParam } from '../types';
 
@@ -30,7 +33,14 @@ export const ProductTable: React.FC<ProductTableProps> = ({
   onGoToConnection,
 }) => {
   const [copiedId, setCopiedId] = useState<string | number | null>(null);
-  const [viewMode, setViewMode] = useState<'auto' | 'table' | 'cards'>('auto');
+  const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
+  const tableScrollRef = useRef<HTMLDivElement | null>(null);
+
+  const handleHorizontalScroll = (direction: 'right' | 'left') => {
+    if (!tableScrollRef.current) return;
+    const offset = direction === 'left' ? -280 : 280;
+    tableScrollRef.current.scrollBy({ left: offset, behavior: 'smooth' });
+  };
 
   const handleCopyId = (id: string | number, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -103,57 +113,44 @@ export const ProductTable: React.FC<ProductTableProps> = ({
   return (
     <div className="space-y-3">
       {/* View Mode Switcher Bar */}
-      <div className="flex items-center justify-between text-xs">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
         <span className="text-slate-400">
           انقر على أي منتج لتحديده، أو اضغط على <strong className="text-slate-200">ربط / تفاصيل</strong> لفتح الحاسبة وأكواد الـ API
         </span>
-        <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 p-1 rounded-lg shrink-0">
+        <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 p-1 rounded-xl shrink-0">
           <button
             type="button"
-            onClick={() => setViewMode('auto')}
-            className={`px-2.5 py-1 rounded text-[11px] font-medium transition-colors ${
-              viewMode === 'auto'
-                ? 'bg-indigo-600 text-white'
+            onClick={() => setViewMode('table')}
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-bold transition-colors ${
+              viewMode === 'table'
+                ? 'bg-indigo-600 text-white shadow-xs'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            تلقائي (متجاوب)
+            <TableIcon className="w-3.5 h-3.5" />
+            <span>جدول (قابل للسحب)</span>
           </button>
           <button
             type="button"
             onClick={() => setViewMode('cards')}
-            className={`flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium transition-colors ${
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-bold transition-colors ${
               viewMode === 'cards'
-                ? 'bg-indigo-600 text-white'
+                ? 'bg-indigo-600 text-white shadow-xs'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
             <LayoutGrid className="w-3.5 h-3.5" />
             <span>بطاقات</span>
           </button>
-          <button
-            type="button"
-            onClick={() => setViewMode('table')}
-            className={`flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium transition-colors ${
-              viewMode === 'table'
-                ? 'bg-indigo-600 text-white'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <TableIcon className="w-3.5 h-3.5" />
-            <span>جدول</span>
-          </button>
         </div>
       </div>
 
-      {/* Responsive Cards View (Default on Mobile/Tablet < lg, or when viewMode === 'cards') */}
+      {/* Responsive Cards View (When user selects 'cards') */}
       <div
         className={
           viewMode === 'cards'
             ? 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3'
-            : viewMode === 'table'
-            ? 'hidden'
-            : 'grid grid-cols-1 md:grid-cols-2 gap-3 lg:hidden'
+            : 'hidden'
         }
       >
         {products.map((product) => {
@@ -309,18 +306,47 @@ export const ProductTable: React.FC<ProductTableProps> = ({
         })}
       </div>
 
-      {/* Full Table View (Default on Desktop >= lg, or when viewMode === 'table') */}
+      {/* Full Horizontally Scrollable Table View (Default on Mobile & Desktop) */}
       <div
         className={
           viewMode === 'table'
             ? 'bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm block'
-            : viewMode === 'cards'
-            ? 'hidden'
-            : 'bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm hidden lg:block'
+            : 'hidden'
         }
       >
-        <div className="overflow-x-auto">
-          <table className="w-full text-right text-xs border-collapse">
+        {/* Mobile Horizontal Swipe Helper & Quick Scroll Buttons */}
+        <div className="lg:hidden flex items-center justify-between gap-2 px-3 py-2 bg-slate-950/90 border-b border-slate-800 text-[11px] text-slate-400">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <MoveHorizontal className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+            <span className="truncate">اسحب الجدول أفقياً لاستعراض كافة الأعمدة (10 أعمدة)</span>
+          </div>
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              type="button"
+              onClick={() => handleHorizontalScroll('right')}
+              className="p-1 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-300 active:scale-95"
+              title="تمرير الجدول لليمين"
+              aria-label="تمرير لليمين"
+            >
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => handleHorizontalScroll('left')}
+              className="p-1 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-300 active:scale-95"
+              title="تمرير الجدول لليسار"
+              aria-label="تمرير لليسار"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+
+        <div
+          ref={tableScrollRef}
+          className="overflow-x-auto overscroll-x-contain touch-pan-x scroll-smooth w-full"
+        >
+          <table className="w-full min-w-[1060px] text-right text-xs border-collapse">
             <thead>
               <tr className="bg-slate-950 border-b border-slate-800 text-slate-400 font-semibold select-none">
                 <th className="py-3 px-3.5 w-10 text-center">

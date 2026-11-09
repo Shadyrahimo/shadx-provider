@@ -1314,7 +1314,7 @@ export default function App() {
       />
 
       {/* Main Content Column */}
-      <div className="flex-1 min-w-0 flex flex-col pb-16 lg:pb-0">
+      <div className="flex-1 min-w-0 flex flex-col pb-24 lg:pb-0">
         {/* Compact Responsive Top Header */}
         <Header
           activeSection={activeSection}
