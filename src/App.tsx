@@ -129,8 +129,16 @@ export default function App() {
   const [sessionToken, setSessionToken] = useState<string | null>(
     () => localStorage.getItem('shadx_session_token')
   );
-  const [isAuthReady, setIsAuthReady] = useState<boolean>(true);
+  const [isAuthReady, setIsAuthReady] = useState<boolean>(false);
   const [isSigningIn, setIsSigningIn] = useState<boolean>(false);
+
+  // Failsafe timer: ensure UI is never stuck on splash if network/auth is slow
+  useEffect(() => {
+    const failsafe = setTimeout(() => {
+      setIsAuthReady(true);
+    }, 2000);
+    return () => clearTimeout(failsafe);
+  }, []);
   const [authError, setAuthError] = useState<string | null>(null);
   const [currentUserProfile, setCurrentUserProfile] = useState<UserAccountProfile | null>(null);
   const [allAccounts, setAllAccounts] = useState<UserAccountProfile[]>([]);
@@ -1818,6 +1826,7 @@ export default function App() {
 
   // Loading timeout state & smooth fade-out transition state
   const [loadingTimedOut, setLoadingTimedOut] = useState(false);
+  const [showSplash, setShowSplash] = useState(true);
   const [isFadingOut, setIsFadingOut] = useState(false);
 
   useEffect(() => {
@@ -1825,68 +1834,82 @@ export default function App() {
       if (!isAuthReady) {
         setLoadingTimedOut(true);
       }
-    }, 15000);
+    }, 12000);
     return () => clearTimeout(timer);
   }, [isAuthReady]);
 
   useEffect(() => {
     if (isAuthReady) {
       setIsFadingOut(true);
+      const timer = setTimeout(() => {
+        setShowSplash(false);
+      }, 600);
+      return () => clearTimeout(timer);
     }
   }, [isAuthReady]);
 
-  // Show loading screen while Firebase Auth state initializes
-  if (!isAuthReady || isFadingOut) {
-    return (
-      <div
-        className={`min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-6 font-sans relative overflow-hidden select-none transition-opacity duration-700 ease-in-out ${
-          isFadingOut ? 'opacity-0 pointer-events-none' : 'opacity-100'
-        }`}
-        dir="rtl"
-      >
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-indigo-950/40 via-slate-950 to-slate-950 pointer-events-none" />
+  // Non-blocking smooth splash overlay
+  const splashOverlay = showSplash ? (
+    <div
+      className={`fixed inset-0 z-50 bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-6 font-sans select-none transition-opacity duration-600 ease-in-out ${
+        isFadingOut ? 'opacity-0 pointer-events-none' : 'opacity-100'
+      }`}
+      dir="rtl"
+    >
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-indigo-950/40 via-slate-950 to-slate-950 pointer-events-none" />
 
-        <div className="relative z-10 flex flex-col items-center max-w-sm text-center space-y-5">
-          {/* Smoothly Spinning Tech Hub Icon */}
-          <div className="relative">
-            <div className="absolute -inset-3 bg-gradient-to-r from-indigo-500 via-purple-500 to-violet-500 rounded-full blur-lg opacity-50 animate-pulse" />
-            <div className="relative w-20 h-20 rounded-2xl bg-slate-900 border border-indigo-500/50 flex items-center justify-center text-indigo-400 shadow-2xl">
-              <Cpu className="w-10 h-10 animate-spin text-indigo-400" style={{ animationDuration: '6s' }} />
-            </div>
+      <div className="relative z-10 flex flex-col items-center max-w-sm text-center space-y-5">
+        {/* Smoothly Spinning Tech Hub Icon */}
+        <div className="relative">
+          <div className="absolute -inset-3 bg-gradient-to-r from-indigo-500 via-purple-500 to-violet-500 rounded-full blur-lg opacity-50 animate-pulse" />
+          <div className="relative w-20 h-20 rounded-2xl bg-slate-900 border border-indigo-500/50 flex items-center justify-center text-indigo-400 shadow-2xl">
+            <Cpu className="w-10 h-10 animate-spin text-indigo-400" style={{ animationDuration: '6s' }} />
           </div>
+        </div>
 
-          <div className="space-y-2">
-            <h3 className="text-base font-extrabold text-white tracking-wide">
-              ShadX-Provider Hub
-            </h3>
-            <p className="text-xs font-bold text-indigo-300 tracking-wide">
-              بيئة آمنة، موثوقة، وفعّالة
+        <div className="space-y-2">
+          <h3 className="text-base font-extrabold text-white tracking-wide">
+            ShadX-Provider Hub
+          </h3>
+          <p className="text-xs font-bold text-indigo-300 tracking-wide">
+            بيئة آمنة، موثوقة، وفعّالة
+          </p>
+        </div>
+
+        {loadingTimedOut ? (
+          <div className="space-y-3 pt-2">
+            <p className="text-[11px] text-amber-300">
+              استغرقت عملية التحقق وقتاً أطول من المتوقع.
             </p>
-          </div>
-
-          {loadingTimedOut ? (
-            <div className="space-y-3 pt-2">
-              <p className="text-[11px] text-amber-300">
-                استغرقت عملية التحقق وقتاً أطول من المتوقع. يمكنك إعادة المحاولة:
-              </p>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowSplash(false);
+                  setIsAuthReady(true);
+                }}
+                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-colors shadow-sm cursor-pointer"
+              >
+                المتابعة إلى الموقع
+              </button>
               <button
                 type="button"
                 onClick={() => window.location.reload()}
-                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-colors shadow-sm cursor-pointer"
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition-colors shadow-sm cursor-pointer"
               >
-                إعادة المحاولة (Retry)
+                إعادة المحاولة
               </button>
             </div>
-          ) : (
-            <div className="flex items-center gap-2 pt-2">
-              <div className="w-2 h-2 rounded-full bg-indigo-500 animate-ping" />
-              <span className="text-[11px] text-slate-400 font-mono">جارِ مزامنة الجلسة وصلاحيات الحساب...</span>
-            </div>
-          )}
-        </div>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 pt-2">
+            <div className="w-2 h-2 rounded-full bg-indigo-500 animate-ping" />
+            <span className="text-[11px] text-slate-400 font-mono">جارِ مزامنة الجلسة وصلاحيات الحساب...</span>
+          </div>
+        )}
       </div>
-    );
-  }
+    </div>
+  ) : null;
 
   // Gate the entire platform behind Authentication, Active Status, and Active Paid Subscription Plan (or Owner Admin)
   const isOwnerAdmin =
@@ -1902,23 +1925,27 @@ export default function App() {
     (!hasActivePaidPlan && !isOwnerAdmin)
   ) {
     return (
-      <AuthGateView
-        currentUserProfile={currentUserProfile}
-        authEmail={currentUserProfile?.email || firebaseUser?.email || null}
-        isSigningIn={isSigningIn}
-        authError={authError}
-        onEmailLogin={handleEmailLogin}
-        onEmailRegister={handleEmailRegister}
-        onGoogleAuth={handleGoogleAuth}
-        onSignOut={handleSignOutUser}
-        onUpdateOwnMerchantProfile={handleUpdateOwnMerchantProfile}
-        themeMode={themeMode}
-      />
+      <>
+        {splashOverlay}
+        <AuthGateView
+          currentUserProfile={currentUserProfile}
+          authEmail={currentUserProfile?.email || firebaseUser?.email || null}
+          isSigningIn={isSigningIn}
+          authError={authError}
+          onEmailLogin={handleEmailLogin}
+          onEmailRegister={handleEmailRegister}
+          onGoogleAuth={handleGoogleAuth}
+          onSignOut={handleSignOutUser}
+          onUpdateOwnMerchantProfile={handleUpdateOwnMerchantProfile}
+          themeMode={themeMode}
+        />
+      </>
     );
   }
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex font-sans" dir="rtl">
+      {splashOverlay}
       {/* Responsive Sidebar Navigation (Desktop Sticky + Mobile Drawer + Mobile Bottom Bar) */}
       <Sidebar
         activeSection={activeSection}
