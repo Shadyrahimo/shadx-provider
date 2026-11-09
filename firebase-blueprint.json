@@ -1,0 +1,138 @@
+{
+  "entities": {
+    "UserAccount": {
+      "title": "UserAccount",
+      "description": "Represents a registered merchant or administrator account managed by the platform owner.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the account holder.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Verified email address of the user.",
+          "minLength": 3,
+          "maxLength": 160
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Full name of the user or account manager.",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "storeName": {
+          "type": "string",
+          "description": "Merchant store or company name.",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "contactInfo": {
+          "type": "string",
+          "description": "Phone, WhatsApp, or Telegram contact handle.",
+          "minLength": 0,
+          "maxLength": 160
+        },
+        "role": {
+          "type": "string",
+          "description": "Access control role assigned by the platform owner.",
+          "enum": ["owner", "admin", "merchant"]
+        },
+        "accountStatus": {
+          "type": "string",
+          "description": "Approval and subscription status controlled by the owner.",
+          "enum": ["pending", "active", "suspended"]
+        },
+        "planTier": {
+          "type": "string",
+          "description": "Subscription tier assigned to the account.",
+          "enum": ["starter", "pro", "enterprise"]
+        },
+        "subscriptionEndsAt": {
+          "type": "string",
+          "description": "ISO date string or label indicating when the subscription expires.",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "notes": {
+          "type": "string",
+          "description": "Owner administrative notes about the subscriber.",
+          "minLength": 0,
+          "maxLength": 500
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the account was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the account was last updated."
+        }
+      },
+      "required": [
+        "uid",
+        "email",
+        "displayName",
+        "storeName",
+        "contactInfo",
+        "role",
+        "accountStatus",
+        "planTier",
+        "subscriptionEndsAt",
+        "notes",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "AdminRecord": {
+      "title": "AdminRecord",
+      "description": "Trusted administrator lookup document managed exclusively by the platform owner.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the administrator.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Verified email of the administrator.",
+          "minLength": 3,
+          "maxLength": 160
+        },
+        "grantedBy": {
+          "type": "string",
+          "description": "UID of the owner who granted admin access.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when admin access was granted."
+        }
+      },
+      "required": ["uid", "email", "grantedBy", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserAccount" },
+      "description": "Stores user and merchant accounts, subscription status, and role permissions."
+    },
+    "/admins/{adminId}": {
+      "schema": { "$ref": "#/entities/AdminRecord" },
+      "description": "Trusted registry of administrator UIDs managed by the platform owner."
+    }
+  }
+}

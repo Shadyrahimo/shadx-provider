@@ -1,0 +1,179 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Default-Deny Catch-All
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 1. Hardened Global Primitives
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    // Bootstrapped Owner (Runtime User Email with verified email)
+    function isBootstrappedOwner() {
+      return isSignedIn() && request.auth.token.email == 'shadyrahimo@gmail.com';
+    }
+
+    // Trusted Admin Check (Bootstrapped Owner OR verified record in /admins/{uid})
+    function isAdmin() {
+      return isBootstrappedOwner() || (isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+
+    // 2. Entity Validation Blueprints (Synchronized with firebase-blueprint.json)
+    function isValidUserAccount(data) {
+      return data.keys().hasAll([
+          'uid',
+          'email',
+          'displayName',
+          'storeName',
+          'contactInfo',
+          'role',
+          'accountStatus',
+          'planTier',
+          'subscriptionEndsAt',
+          'notes',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'uid',
+          'email',
+          'displayName',
+          'storeName',
+          'contactInfo',
+          'role',
+          'accountStatus',
+          'planTier',
+          'subscriptionEndsAt',
+          'notes',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.uid is string && data.uid.size() >= 1 && data.uid.size() <= 128 && data.uid.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 160
+        && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 100
+        && data.storeName is string && data.storeName.size() >= 1 && data.storeName.size() <= 120
+        && data.contactInfo is string && data.contactInfo.size() <= 160
+        && data.role is string && (data.role == 'owner' || data.role == 'admin' || data.role == 'merchant')
+        && data.accountStatus is string && (data.accountStatus == 'pending' || data.accountStatus == 'active' || data.accountStatus == 'suspended')
+        && data.planTier is string && (data.planTier == 'starter' || data.planTier == 'pro' || data.planTier == 'enterprise')
+        && data.subscriptionEndsAt is string && data.subscriptionEndsAt.size() >= 1 && data.subscriptionEndsAt.size() <= 64
+        && data.notes is string && data.notes.size() <= 500
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidAdminRecord(data) {
+      return data.keys().hasAll(['uid', 'email', 'grantedBy', 'createdAt'])
+        && data.keys().hasOnly(['uid', 'email', 'grantedBy', 'createdAt'])
+        && data.uid is string && data.uid.size() >= 1 && data.uid.size() <= 128 && data.uid.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 160
+        && data.grantedBy is string && data.grantedBy.size() >= 1 && data.grantedBy.size() <= 128 && data.grantedBy.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.createdAt is timestamp;
+    }
+
+    // 3. Collection Rules: /users/{userId}
+    match /users/{userId} {
+      // Single-document read restricted to account owner or Admin
+      allow get: if isSignedIn() && isValidId(userId) && (userId == request.auth.uid || isAdmin());
+
+      // List queries: strictly no get()/exists() calls; restricted to owner's own doc or Bootstrapped Owner
+      allow list: if isSignedIn() && (existing().uid == request.auth.uid || isBootstrappedOwner());
+
+      // Create: strict schema + server timestamps + anti-privilege-escalation
+      allow create: if isSignedIn()
+        && isValidId(userId)
+        && isValidUserAccount(incoming())
+        && incoming().uid == userId
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && (
+          // Action A: Bootstrapped Owner creating their own Owner profile or pre-provisioning a subscriber
+          isBootstrappedOwner()
+          ||
+          // Action B: Standard user self-registering (strictly merchant + pending approval)
+          (userId == request.auth.uid
+            && incoming().email == request.auth.token.email
+            && incoming().role == 'merchant'
+            && incoming().accountStatus == 'pending'
+            && incoming().notes == ''
+          )
+        );
+
+      // Update: starts with validation helper, enforces immutable & timestamp fields, and partitions Tier 1 vs Tier 2 actions
+      allow update: if isSignedIn()
+        && isValidId(userId)
+        && isValidUserAccount(incoming())
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          // Action A (Tier 1 - Owner/Admin Override): Can manage status, role, planTier, subscriptionEndsAt, notes, and profile fields
+          (isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly([
+            'displayName',
+            'storeName',
+            'contactInfo',
+            'role',
+            'accountStatus',
+            'planTier',
+            'subscriptionEndsAt',
+            'notes',
+            'updatedAt'
+          ]))
+          ||
+          // Action B (Tier 2 - Merchant Self-Update): Locked if suspended; can only update displayName, storeName, contactInfo
+          (userId == request.auth.uid
+            && existing().accountStatus != 'suspended'
+            && incoming().email == existing().email
+            && incoming().role == existing().role
+            && incoming().accountStatus == existing().accountStatus
+            && incoming().planTier == existing().planTier
+            && incoming().subscriptionEndsAt == existing().subscriptionEndsAt
+            && incoming().notes == existing().notes
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'displayName',
+              'storeName',
+              'contactInfo',
+              'updatedAt'
+            ])
+          )
+        );
+
+      // Delete: Only Admin/Owner can delete an account
+      allow delete: if isSignedIn() && isValidId(userId) && isAdmin();
+    }
+
+    // 4. Collection Rules: /admins/{adminId}
+    match /admins/{adminId} {
+      allow get: if isSignedIn() && isValidId(adminId) && (adminId == request.auth.uid || isBootstrappedOwner());
+      allow list: if isBootstrappedOwner() && existing().uid is string;
+
+      allow create: if isBootstrappedOwner()
+        && isValidId(adminId)
+        && isValidAdminRecord(incoming())
+        && incoming().uid == adminId
+        && incoming().grantedBy == request.auth.uid
+        && incoming().createdAt == request.time
+        && exists(/databases/$(database)/documents/users/$(adminId));
+
+      allow update: if false;
+
+      allow delete: if isBootstrappedOwner() && isValidId(adminId);
+    }
+  }
+}

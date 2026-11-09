@@ -15,12 +15,22 @@ import {
   Moon,
   Sun,
   Scale,
+  Users,
+  Crown,
+  LogOut,
 } from 'lucide-react';
-import { SyncScheduleConfig, MarginConfig, ThemeMode } from '../types';
+import {
+  SyncScheduleConfig,
+  MarginConfig,
+  ThemeMode,
+  UserAccountProfile,
+} from '../types';
+import { OWNER_EMAIL } from '../firebase';
 
 export type ActiveSectionId =
   | 'catalog'
   | 'compare'
+  | 'accounts'
   | 'connection'
   | 'pricing'
   | 'alerts'
@@ -43,6 +53,9 @@ interface SidebarProps {
   themeMode: ThemeMode;
   resolvedTheme: 'dark' | 'light';
   onChangeThemeMode: (mode: ThemeMode) => void;
+  currentUserProfile?: UserAccountProfile | null;
+  pendingAccountsCount?: number;
+  onSignOut?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -61,7 +74,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
   themeMode,
   resolvedTheme,
   onChangeThemeMode,
+  currentUserProfile,
+  pendingAccountsCount = 0,
+  onSignOut,
 }) => {
+  const isOwner =
+    currentUserProfile?.email === OWNER_EMAIL || currentUserProfile?.role === 'owner';
+
   const navItems: {
     id: ActiveSectionId;
     label: string;
@@ -90,6 +109,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
       icon: Scale,
       badge: 'مزودين',
       badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
+    },
+    {
+      id: 'accounts',
+      label: isOwner ? 'إدارة الحسابات (المالك)' : 'حسابي واشتراكي',
+      shortLabel: 'الحسابات',
+      subtitle: isOwner
+        ? 'تفعيل المشتركين والباقات والصلاحيات'
+        : 'تفاصيل باقتك وحالة اشتراكك',
+      icon: isOwner ? Crown : Users,
+      badge: isOwner
+        ? pendingAccountsCount > 0
+          ? `${pendingAccountsCount} طلب`
+          : 'المالك'
+        : 'نشط',
+      mobileBadge: isOwner && pendingAccountsCount > 0 ? pendingAccountsCount : undefined,
+      badgeColor:
+        isOwner && pendingAccountsCount > 0
+          ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+          : 'bg-amber-500/15 text-amber-300 border-amber-500/30',
     },
     {
       id: 'connection',
@@ -353,6 +391,33 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </button>
         </div>
 
+        {currentUserProfile && (
+          <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between gap-2 text-[11px]">
+            <div
+              onClick={() => handleSelect('accounts')}
+              className="min-w-0 cursor-pointer hover:opacity-90"
+            >
+              <div className="font-bold text-slate-200 truncate flex items-center gap-1">
+                {isOwner && <Crown className="w-3 h-3 text-amber-400 shrink-0" />}
+                <span className="truncate">{currentUserProfile.storeName}</span>
+              </div>
+              <div className="text-[10px] text-slate-400 font-mono-numbers truncate">
+                {currentUserProfile.email}
+              </div>
+            </div>
+            {onSignOut && (
+              <button
+                type="button"
+                onClick={onSignOut}
+                className="p-1.5 rounded-lg bg-slate-900 hover:bg-rose-950/60 border border-slate-800 hover:border-rose-500/40 text-slate-400 hover:text-rose-300 transition-colors shrink-0"
+                title="تسجيل الخروج"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        )}
+
         <div className="pt-1 flex items-center justify-between text-[11px] text-slate-500">
           <div className="flex items-center gap-2">
             <img
@@ -393,7 +458,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         aria-label="قائمة التنقل السفلية للهاتف"
         className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 shadow-[0_-8px_24px_rgba(2,6,23,0.45)] px-1 pt-1.5 pb-[max(0.4rem,env(safe-area-inset-bottom))]"
       >
-        <div className="grid grid-cols-7 gap-0.5 max-w-xl mx-auto">
+        <div className="grid grid-cols-8 gap-0.5 max-w-xl mx-auto">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeSection === item.id;

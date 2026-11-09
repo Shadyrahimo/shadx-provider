@@ -12,6 +12,33 @@ import { AlertToast } from './components/AlertToast';
 import { SyncScheduleModal } from './components/SyncScheduleModal';
 import { DeploymentGuideModal } from './components/DeploymentGuideModal';
 import { DualComparisonView } from './components/DualComparisonView';
+import { AuthGateView } from './components/AuthGateView';
+import { AdminAccountsView } from './components/AdminAccountsView';
+import {
+  onAuthStateChanged,
+  signInWithPopup,
+  signOut,
+  User as FirebaseUser,
+} from 'firebase/auth';
+import {
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  collection,
+  onSnapshot,
+  serverTimestamp,
+} from 'firebase/firestore';
+import {
+  auth,
+  db,
+  googleProvider,
+  OWNER_EMAIL,
+  ACCOUNT_CONSTRAINTS,
+  OperationType,
+  handleFirestoreError,
+  sanitizeString,
+} from './firebase';
 import {
   ProviderPreset,
   MarginConfig,
@@ -25,6 +52,8 @@ import {
   NormalizedParam,
   ThemeMode,
   PriceHistoryPoint,
+  UserAccountProfile,
+  SubscriptionPlanTier,
 } from './types';
 import { PROVIDER_PRESETS } from './data/mockCatalog';
 import {
@@ -86,6 +115,185 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('shadx_api_token', apiToken);
   }, [apiToken]);
+
+  // Firebase Auth & Account Management State
+  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
+  const [isAuthReady, setIsAuthReady] = useState<boolean>(false);
+  const [isSigningIn, setIsSigningIn] = useState<boolean>(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [currentUserProfile, setCurrentUserProfile] = useState<UserAccountProfile | null>(null);
+  const [allAccounts, setAllAccounts] = useState<UserAccountProfile[]>([]);
+  const pendingRegistrationDraftRef = useRef<{
+    displayName: string;
+    storeName: string;
+    contactInfo: string;
+    planTier: SubscriptionPlanTier;
+  } | null>(null);
+
+  // 1. Track Firebase Auth state
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      setFirebaseUser(user);
+      if (!user) {
+        setCurrentUserProfile(null);
+        setAllAccounts([]);
+        setIsAuthReady(true);
+        return;
+      }
+
+      // Ensure user profile document exists in /users/{uid}
+      const userDocPath = `users/${user.uid}`;
+      const userRef = doc(db, 'users', user.uid);
+      try {
+        const snap = await getDoc(userRef);
+        if (!snap.exists()) {
+          const isOwnerAccount = user.email === OWNER_EMAIL;
+          const draft = pendingRegistrationDraftRef.current;
+          const safeUid = sanitizeString(user.uid, ACCOUNT_CONSTRAINTS.UID_MAX, 'user_1');
+          const safeEmail = sanitizeString(
+            user.email || 'user@example.com',
+            ACCOUNT_CONSTRAINTS.EMAIL_MAX,
+            'user@example.com'
+          );
+          const safeDisplayName = sanitizeString(
+            draft?.displayName || user.displayName || (isOwnerAccount ? 'المدير المالك' : 'مشترك جديد'),
+            ACCOUNT_CONSTRAINTS.DISPLAY_NAME_MAX,
+            'مشترك جديد'
+          );
+          const safeStoreName = sanitizeString(
+            draft?.storeName || (isOwnerAccount ? 'الإدارة العامة - ShadX' : 'متجر رقمي'),
+            ACCOUNT_CONSTRAINTS.STORE_NAME_MAX,
+            'متجر رقمي'
+          );
+          const safeContactInfo = sanitizeString(
+            draft?.contactInfo || '',
+            ACCOUNT_CONSTRAINTS.CONTACT_INFO_MAX,
+            ''
+          );
+
+          await setDoc(userRef, {
+            uid: safeUid,
+            email: safeEmail,
+            displayName: safeDisplayName,
+            storeName: safeStoreName,
+            contactInfo: safeContactInfo,
+            role: isOwnerAccount ? 'owner' : 'merchant',
+            accountStatus: isOwnerAccount ? 'active' : 'pending',
+            planTier: isOwnerAccount ? 'enterprise' : draft?.planTier || 'pro',
+            subscriptionEndsAt: isOwnerAccount ? 'اشتراك دائم (مفتوح)' : 'بانتظار التفعيل',
+            notes: isOwnerAccount ? 'حساب المدير المالك الرئيسي' : '',
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+          pendingRegistrationDraftRef.current = null;
+        }
+      } catch (err) {
+        handleFirestoreError(err, OperationType.WRITE, userDocPath);
+      } finally {
+        setIsAuthReady(true);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // 2. Real-time listener on current user's profile document (/users/{uid})
+  useEffect(() => {
+    if (!isAuthReady || !firebaseUser) return;
+    const userDocPath = `users/${firebaseUser.uid}`;
+    const unsubscribe = onSnapshot(
+      doc(db, 'users', firebaseUser.uid),
+      (snap) => {
+        if (snap.exists()) {
+          setCurrentUserProfile(snap.data() as UserAccountProfile);
+        }
+      },
+      (err) => {
+        handleFirestoreError(err, OperationType.GET, userDocPath);
+      }
+    );
+    return () => unsubscribe();
+  }, [isAuthReady, firebaseUser]);
+
+  // 3. Real-time listener on all accounts (/users) when signed in as Bootstrapped Owner
+  useEffect(() => {
+    if (!isAuthReady || !firebaseUser) return;
+    if (firebaseUser.email !== OWNER_EMAIL) {
+      setAllAccounts(currentUserProfile ? [currentUserProfile] : []);
+      return;
+    }
+
+    const usersPath = 'users';
+    const unsubscribe = onSnapshot(
+      collection(db, 'users'),
+      (snap) => {
+        const list: UserAccountProfile[] = [];
+        snap.forEach((docSnap) => {
+          list.push(docSnap.data() as UserAccountProfile);
+        });
+        setAllAccounts(list);
+      },
+      (err) => {
+        handleFirestoreError(err, OperationType.LIST, usersPath);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [isAuthReady, firebaseUser, currentUserProfile]);
+
+  const handleGoogleAuth = async (registrationDraft?: {
+    displayName: string;
+    storeName: string;
+    contactInfo: string;
+    planTier: SubscriptionPlanTier;
+  }) => {
+    setAuthError(null);
+    setIsSigningIn(true);
+    if (registrationDraft) {
+      pendingRegistrationDraftRef.current = registrationDraft;
+    }
+    try {
+      await signInWithPopup(auth, googleProvider);
+    } catch (err: any) {
+      console.warn('Google sign-in error:', err);
+      setAuthError(
+        err?.message?.includes('popup-closed-by-user')
+          ? 'تم إغلاق نافذة تسجيل الدخول قبل إتمام العملية. يرجى المحاولة مرة أخرى.'
+          : `تعذر إتمام تسجيل الدخول (${err?.code || err?.message || 'خطأ غير معروف'}).`
+      );
+    } finally {
+      setIsSigningIn(false);
+    }
+  };
+
+  const handleSignOutUser = async () => {
+    await signOut(auth);
+    setCurrentUserProfile(null);
+    setAllAccounts([]);
+  };
+
+  const handleUpdateOwnMerchantProfile = async (updates: {
+    displayName: string;
+    storeName: string;
+    contactInfo: string;
+  }) => {
+    if (!firebaseUser) return;
+    const path = `users/${firebaseUser.uid}`;
+    try {
+      await updateDoc(doc(db, 'users', firebaseUser.uid), {
+        displayName: sanitizeString(updates.displayName, ACCOUNT_CONSTRAINTS.DISPLAY_NAME_MAX, 'تاجر'),
+        storeName: sanitizeString(updates.storeName, ACCOUNT_CONSTRAINTS.STORE_NAME_MAX, 'متجر رقمي'),
+        contactInfo: sanitizeString(updates.contactInfo, ACCOUNT_CONSTRAINTS.CONTACT_INFO_MAX, ''),
+        updatedAt: serverTimestamp(),
+      });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, path);
+    }
+  };
+
+  const pendingAccountsCount = useMemo(() => {
+    return allAccounts.filter((a) => a.accountStatus === 'pending').length;
+  }, [allAccounts]);
 
   // Theme Mode ('system' auto-detects OS preference, while 'dark' and 'light' are manual overrides)
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
@@ -1334,6 +1542,39 @@ export default function App() {
     });
   };
 
+  // Show loading screen while Firebase Auth state initializes
+  if (!isAuthReady) {
+    return (
+      <div
+        className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-6 font-sans"
+        dir="rtl"
+      >
+        <div className="w-12 h-12 rounded-2xl bg-indigo-600/20 border border-indigo-500/40 flex items-center justify-center text-indigo-400 mb-3">
+          <RefreshCw className="w-6 h-6 animate-spin" />
+        </div>
+        <p className="text-xs font-bold text-slate-300">
+          جارِ التحقق من جلسة الدخول وصلاحيات الحساب...
+        </p>
+      </div>
+    );
+  }
+
+  // Gate the entire platform behind Authentication & Owner Approval
+  if (!firebaseUser || !currentUserProfile || currentUserProfile.accountStatus !== 'active') {
+    return (
+      <AuthGateView
+        currentUserProfile={currentUserProfile}
+        authEmail={firebaseUser?.email || null}
+        isSigningIn={isSigningIn}
+        authError={authError}
+        onGoogleAuth={handleGoogleAuth}
+        onSignOut={handleSignOutUser}
+        onUpdateOwnMerchantProfile={handleUpdateOwnMerchantProfile}
+        themeMode={themeMode}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex font-sans" dir="rtl">
       {/* Responsive Sidebar Navigation (Desktop Sticky + Mobile Drawer + Mobile Bottom Bar) */}
@@ -1353,6 +1594,9 @@ export default function App() {
         themeMode={themeMode}
         resolvedTheme={resolvedTheme}
         onChangeThemeMode={setThemeMode}
+        currentUserProfile={currentUserProfile}
+        pendingAccountsCount={pendingAccountsCount}
+        onSignOut={handleSignOutUser}
       />
 
       {/* Main Content Column */}
@@ -1787,6 +2031,21 @@ export default function App() {
                 setActiveModalProduct(prod);
                 setModalFixMode(false);
               }}
+            />
+          )}
+
+          {/* SECTION 1.8: OWNER ACCOUNT MANAGEMENT & SUBSCRIBER PROFILE */}
+          {activeSection === 'accounts' && currentUserProfile && (
+            <AdminAccountsView
+              currentUserProfile={currentUserProfile}
+              accounts={
+                firebaseUser.email === OWNER_EMAIL ? allAccounts : [currentUserProfile]
+              }
+              isOwner={
+                firebaseUser.email === OWNER_EMAIL || currentUserProfile.role === 'owner'
+              }
+              onSignOut={handleSignOutUser}
+              onNotify={(text, type) => setNotification({ text, type })}
             />
           )}
 

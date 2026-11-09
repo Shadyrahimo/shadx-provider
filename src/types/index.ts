@@ -189,7 +189,21 @@ export interface PriceHistoryPoint {
   source?: string;
 }
 
+export type UserAccountRole = 'owner' | 'admin' | 'merchant';
+export type UserAccountStatus = 'pending' | 'active' | 'suspended';
+export type SubscriptionPlanTier = 'starter' | 'pro' | 'enterprise';
 
-
-
-
+export interface UserAccountProfile {
+  uid: string;
+  email: string;
+  displayName: string;
+  storeName: string;
+  contactInfo: string;
+  role: UserAccountRole;
+  accountStatus: UserAccountStatus;
+  planTier: SubscriptionPlanTier;
+  subscriptionEndsAt: string;
+  notes: string;
+  createdAt?: any;
+  updatedAt?: any;
+}
