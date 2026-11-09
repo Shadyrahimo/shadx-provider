@@ -2,6 +2,12 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+@theme {
+  --font-sans: 'Almarai', 'Cairo', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-display: 'Cairo', 'Almarai', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Cairo', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
 @layer base {
   html.dark {
     color-scheme: dark;
@@ -58,26 +64,46 @@
     --color-cyan-300: #0e7490;
   }
 
-  body {
-    font-family: 'Readex Pro', 'IBM Plex Sans Arabic', system-ui, -apple-system, sans-serif;
+  html,
+  body,
+  button,
+  input,
+  select,
+  textarea {
+    font-family: 'Almarai', 'Cairo', system-ui, -apple-system, sans-serif;
     font-feature-settings: 'kern' 1, 'liga' 1;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
-    line-height: 1.6;
+  }
+
+  body {
+    line-height: 1.65;
     transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6,
+  .font-heading {
+    font-family: 'Cairo', 'Almarai', system-ui, -apple-system, sans-serif;
+    letter-spacing: -0.01em;
+    line-height: 1.4;
   }
   
   .font-mono-numbers {
-    font-family: 'Plus Jakarta Sans', 'JetBrains Mono', system-ui, -apple-system, sans-serif;
+    font-family: 'Plus Jakarta Sans', 'Cairo', 'Almarai', system-ui, -apple-system, sans-serif;
     font-variant-numeric: tabular-nums lining-nums;
     font-feature-settings: 'tnum' 1, 'zero' 0, 'cv01' 1;
-    letter-spacing: -0.015em;
+    letter-spacing: -0.01em;
     unicode-bidi: isolate;
   }
 
   code, pre, .font-mono {
-    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-family: 'JetBrains Mono', 'Cairo', 'Almarai', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     font-variant-numeric: tabular-nums;
     letter-spacing: -0.01em;
   }
