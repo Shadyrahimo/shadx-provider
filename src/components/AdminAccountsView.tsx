@@ -20,6 +20,7 @@ import {
   X,
   LogOut,
   Sparkles,
+  KeyRound,
 } from 'lucide-react';
 import {
   doc,
@@ -42,12 +43,15 @@ import {
   UserAccountStatus,
   SubscriptionPlanTier,
 } from '../types';
+import { buildBackendUrl } from '../utils/normalizer';
 import { PLAN_TIERS_INFO } from './AuthGateView';
 
 interface AdminAccountsViewProps {
   currentUserProfile: UserAccountProfile;
   accounts: UserAccountProfile[];
   isOwner: boolean;
+  sessionToken?: string | null;
+  onRefreshServerAccounts?: (updatedList?: UserAccountProfile[]) => void;
   onSignOut: () => Promise<void>;
   onNotify: (text: string, type: 'success' | 'error' | 'info') => void;
 }
@@ -56,6 +60,8 @@ export const AdminAccountsView: React.FC<AdminAccountsViewProps> = ({
   currentUserProfile,
   accounts,
   isOwner,
+  sessionToken,
+  onRefreshServerAccounts,
   onSignOut,
   onNotify,
 }) => {
@@ -63,25 +69,27 @@ export const AdminAccountsView: React.FC<AdminAccountsViewProps> = ({
   const [statusFilter, setStatusFilter] = useState<'all' | UserAccountStatus>('all');
   const [planFilter, setPlanFilter] = useState<'all' | SubscriptionPlanTier>('all');
 
-  // Pre-provision / Create new subscriber modal state (for Owner)
+  // Create new subscriber modal state (for Owner)
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newEmail, setNewEmail] = useState('');
+  const [newPassword, setNewPassword] = useState('');
   const [newDisplayName, setNewDisplayName] = useState('');
   const [newStoreName, setNewStoreName] = useState('');
   const [newContactInfo, setNewContactInfo] = useState('');
   const [newPlanTier, setNewPlanTier] = useState<SubscriptionPlanTier>('pro');
   const [newStatus, setNewStatus] = useState<UserAccountStatus>('active');
-  const [newRole, setNewRole] = useState<UserAccountRole>('merchant');
+  const [newRole] = useState<UserAccountRole>('merchant');
   const [newDurationDays, setNewDurationDays] = useState<number>(30);
   const [newNotes, setNewNotes] = useState('');
   const [isSubmittingCreate, setIsSubmittingCreate] = useState(false);
 
-  // Inline editing state for notes / store info
+  // Inline editing state
   const [editingUid, setEditingUid] = useState<string | null>(null);
   const [editStoreName, setEditStoreName] = useState('');
   const [editDisplayName, setEditDisplayName] = useState('');
   const [editContactInfo, setEditContactInfo] = useState('');
   const [editNotes, setEditNotes] = useState('');
+  const [editNewPassword, setEditNewPassword] = useState('');
   const [confirmDeleteUid, setConfirmDeleteUid] = useState<string | null>(null);
 
   // KPI Counts
@@ -118,7 +126,6 @@ export const AdminAccountsView: React.FC<AdminAccountsViewProps> = ({
     });
   }, [accounts, statusFilter, planFilter, searchQuery]);
 
-  // Helper to compute expiration ISO date
   const computeSubscriptionEndDate = (days: number): string => {
     if (days >= 9999) return 'اشتراك دائم (مفتوح)';
     const d = new Date();
@@ -126,17 +133,52 @@ export const AdminAccountsView: React.FC<AdminAccountsViewProps> = ({
     return d.toISOString().split('T')[0];
   };
 
-  // Owner Action: Update account status ('active' | 'pending' | 'suspended')
+  // Helper to update account on Backend API (if sessionToken exists) and/or Firestore
+  const applyAccountMutation = async (
+    targetUid: string,
+    updates: Record<string, any>
+  ): Promise<boolean> => {
+    if (sessionToken) {
+      const res = await fetch(buildBackendUrl(`/api/admin/accounts/${targetUid}`), {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${sessionToken}`,
+        },
+        body: JSON.stringify(updates),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        onNotify(data.error || 'تعذر تحديث الحساب.', 'error');
+        return false;
+      }
+      if (onRefreshServerAccounts) {
+        onRefreshServerAccounts(data.accounts);
+      }
+      return true;
+    }
+
+    // Firestore path when authenticated via Firebase Auth
+    const path = `users/${targetUid}`;
+    const firestoreUpdates = { ...updates };
+    delete firestoreUpdates.newPassword;
+    try {
+      await updateDoc(doc(db, 'users', targetUid), {
+        ...firestoreUpdates,
+        updatedAt: serverTimestamp(),
+      });
+      return true;
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, path);
+    }
+  };
+
   const handleChangeAccountStatus = async (
     target: UserAccountProfile,
     newAccountStatus: UserAccountStatus
   ) => {
-    const path = `users/${target.uid}`;
-    try {
-      await updateDoc(doc(db, 'users', target.uid), {
-        accountStatus: newAccountStatus,
-        updatedAt: serverTimestamp(),
-      });
+    const ok = await applyAccountMutation(target.uid, { accountStatus: newAccountStatus });
+    if (ok) {
       onNotify(
         `تم تحديث حالة حساب (${target.storeName}) إلى: ${
           newAccountStatus === 'active'
@@ -147,61 +189,43 @@ export const AdminAccountsView: React.FC<AdminAccountsViewProps> = ({
         }`,
         'success'
       );
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, path);
     }
   };
 
-  // Owner Action: Update subscription plan tier
   const handleChangePlanTier = async (
     target: UserAccountProfile,
     planTier: SubscriptionPlanTier
   ) => {
-    const path = `users/${target.uid}`;
-    try {
-      await updateDoc(doc(db, 'users', target.uid), {
-        planTier,
-        updatedAt: serverTimestamp(),
-      });
+    const ok = await applyAccountMutation(target.uid, { planTier });
+    if (ok) {
       onNotify(`تم تغيير باقة (${target.storeName}) إلى ${planTier.toUpperCase()}`, 'success');
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, path);
     }
   };
 
-  // Owner Action: Extend / Set subscription duration
   const handleExtendSubscription = async (target: UserAccountProfile, days: number) => {
-    const path = `users/${target.uid}`;
     const subscriptionEndsAt = sanitizeString(
       computeSubscriptionEndDate(days),
       ACCOUNT_CONSTRAINTS.SUBSCRIPTION_ENDS_MAX,
       '2027-01-01'
     );
-    try {
-      await updateDoc(doc(db, 'users', target.uid), {
-        subscriptionEndsAt,
-        accountStatus: 'active',
-        updatedAt: serverTimestamp(),
-      });
+    const ok = await applyAccountMutation(target.uid, {
+      subscriptionEndsAt,
+      accountStatus: 'active',
+    });
+    if (ok) {
       onNotify(
         `تم تمديد اشتراك (${target.storeName}) وتفعيله حتى: ${subscriptionEndsAt}`,
         'success'
       );
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, path);
     }
   };
 
-  // Owner Action: Update user role ('merchant' | 'admin') and sync /admins/{uid}
   const handleChangeRole = async (target: UserAccountProfile, role: UserAccountRole) => {
     if (target.email === OWNER_EMAIL) return;
-    const userPath = `users/${target.uid}`;
-    try {
-      await updateDoc(doc(db, 'users', target.uid), {
-        role,
-        updatedAt: serverTimestamp(),
-      });
+    const ok = await applyAccountMutation(target.uid, { role });
+    if (!ok) return;
 
+    if (!sessionToken) {
       if (role === 'admin') {
         const adminPath = `admins/${target.uid}`;
         try {
@@ -215,70 +239,77 @@ export const AdminAccountsView: React.FC<AdminAccountsViewProps> = ({
           handleFirestoreError(err, OperationType.CREATE, adminPath);
         }
       } else {
-        const adminPath = `admins/${target.uid}`;
         try {
           await deleteDoc(doc(db, 'admins', target.uid));
         } catch {
           // Ignore if admin doc did not exist
         }
       }
-
-      onNotify(
-        `تم تحديث صلاحية (${target.displayName}) إلى: ${
-          role === 'admin' ? 'مدير مساعد (Admin)' : 'تاجر مشترك (Merchant)'
-        }`,
-        'success'
-      );
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, userPath);
     }
+
+    onNotify(
+      `تم تحديث صلاحية (${target.displayName}) إلى: ${
+        role === 'admin' ? 'مدير مساعد' : 'تاجر مشترك'
+      }`,
+      'success'
+    );
   };
 
-  // Owner Action: Save inline edits (displayName, storeName, contactInfo, notes)
   const handleSaveInlineEdit = async (target: UserAccountProfile) => {
-    const path = `users/${target.uid}`;
-    try {
-      if (isOwner) {
-        await updateDoc(doc(db, 'users', target.uid), {
-          displayName: sanitizeString(
-            editDisplayName,
-            ACCOUNT_CONSTRAINTS.DISPLAY_NAME_MAX,
-            target.displayName
-          ),
-          storeName: sanitizeString(
-            editStoreName,
-            ACCOUNT_CONSTRAINTS.STORE_NAME_MAX,
-            target.storeName
-          ),
-          contactInfo: sanitizeString(editContactInfo, ACCOUNT_CONSTRAINTS.CONTACT_INFO_MAX, ''),
-          notes: sanitizeString(editNotes, ACCOUNT_CONSTRAINTS.NOTES_MAX, ''),
-          updatedAt: serverTimestamp(),
-        });
+    if (sessionToken && !isOwner) {
+      const res = await fetch(buildBackendUrl('/api/auth/profile'), {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${sessionToken}`,
+        },
+        body: JSON.stringify({
+          displayName: editDisplayName,
+          storeName: editStoreName,
+          contactInfo: editContactInfo,
+          newPassword: editNewPassword.length >= 6 ? editNewPassword : undefined,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setEditingUid(null);
+        setEditNewPassword('');
+        if (onRefreshServerAccounts) onRefreshServerAccounts();
+        onNotify('تم حفظ التعديلات بنجاح.', 'success');
       } else {
-        // Tier 2 Merchant self-update
-        await updateDoc(doc(db, 'users', target.uid), {
-          displayName: sanitizeString(
-            editDisplayName,
-            ACCOUNT_CONSTRAINTS.DISPLAY_NAME_MAX,
-            target.displayName
-          ),
-          storeName: sanitizeString(
-            editStoreName,
-            ACCOUNT_CONSTRAINTS.STORE_NAME_MAX,
-            target.storeName
-          ),
-          contactInfo: sanitizeString(editContactInfo, ACCOUNT_CONSTRAINTS.CONTACT_INFO_MAX, ''),
-          updatedAt: serverTimestamp(),
-        });
+        onNotify(data.error || 'تعذر حفظ التعديلات.', 'error');
       }
+      return;
+    }
+
+    const payload: Record<string, any> = {
+      displayName: sanitizeString(
+        editDisplayName,
+        ACCOUNT_CONSTRAINTS.DISPLAY_NAME_MAX,
+        target.displayName
+      ),
+      storeName: sanitizeString(
+        editStoreName,
+        ACCOUNT_CONSTRAINTS.STORE_NAME_MAX,
+        target.storeName
+      ),
+      contactInfo: sanitizeString(editContactInfo, ACCOUNT_CONSTRAINTS.CONTACT_INFO_MAX, ''),
+    };
+    if (isOwner) {
+      payload.notes = sanitizeString(editNotes, ACCOUNT_CONSTRAINTS.NOTES_MAX, '');
+      if (editNewPassword.length >= 6) {
+        payload.newPassword = editNewPassword;
+      }
+    }
+
+    const ok = await applyAccountMutation(target.uid, payload);
+    if (ok) {
       setEditingUid(null);
+      setEditNewPassword('');
       onNotify(`تم حفظ التعديلات لحساب (${editStoreName}) بنجاح.`, 'success');
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, path);
     }
   };
 
-  // Owner Action: Pre-provision a new subscriber account record
   const handleCreateSubscriberAccount = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isOwner) return;
@@ -293,52 +324,110 @@ export const AdminAccountsView: React.FC<AdminAccountsViewProps> = ({
       onNotify('يرجى إدخال البريد الإلكتروني والاسم الكامل واسم المتجر.', 'error');
       return;
     }
+    if (newPassword.length > 0 && newPassword.length < 6) {
+      onNotify('كلمة المرور يجب ألا تقل عن 6 أحرف.', 'error');
+      return;
+    }
 
-    // Generate a deterministic safe ID for pre-provisioned account
-    const generatedId = `sub_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`.replace(
-      /[^a-zA-Z0-9_\-]/g,
-      ''
-    );
-    const path = `users/${generatedId}`;
     setIsSubmittingCreate(true);
 
     try {
-      await setDoc(doc(db, 'users', generatedId), {
-        uid: generatedId,
-        email: cleanEmail,
-        displayName: cleanName,
-        storeName: cleanStore,
-        contactInfo: cleanContact,
-        role: newRole,
-        accountStatus: newStatus,
-        planTier: newPlanTier,
-        subscriptionEndsAt: sanitizeString(
-          computeSubscriptionEndDate(newDurationDays),
-          ACCOUNT_CONSTRAINTS.SUBSCRIPTION_ENDS_MAX,
-          '2027-01-01'
-        ),
-        notes: cleanNotes,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
+      if (sessionToken) {
+        const res = await fetch(buildBackendUrl('/api/admin/accounts'), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${sessionToken}`,
+          },
+          body: JSON.stringify({
+            email: cleanEmail,
+            password: newPassword || '123456',
+            displayName: cleanName,
+            storeName: cleanStore,
+            contactInfo: cleanContact,
+            role: newRole,
+            accountStatus: newStatus,
+            planTier: newPlanTier,
+            subscriptionEndsAt: sanitizeString(
+              computeSubscriptionEndDate(newDurationDays),
+              ACCOUNT_CONSTRAINTS.SUBSCRIPTION_ENDS_MAX,
+              '2027-01-01'
+            ),
+            notes: cleanNotes,
+          }),
+        });
+        const data = await res.json();
+        if (!data.success) {
+          onNotify(data.error || 'تعذر إنشاء الحساب.', 'error');
+          return;
+        }
+        if (onRefreshServerAccounts) {
+          onRefreshServerAccounts(data.accounts);
+        }
+      } else {
+        const generatedId = `sub_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`.replace(
+          /[^a-zA-Z0-9_\-]/g,
+          ''
+        );
+        const path = `users/${generatedId}`;
+        try {
+          await setDoc(doc(db, 'users', generatedId), {
+            uid: generatedId,
+            email: cleanEmail,
+            displayName: cleanName,
+            storeName: cleanStore,
+            contactInfo: cleanContact,
+            role: newRole,
+            accountStatus: newStatus,
+            planTier: newPlanTier,
+            subscriptionEndsAt: sanitizeString(
+              computeSubscriptionEndDate(newDurationDays),
+              ACCOUNT_CONSTRAINTS.SUBSCRIPTION_ENDS_MAX,
+              '2027-01-01'
+            ),
+            notes: cleanNotes,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+        } catch (err) {
+          handleFirestoreError(err, OperationType.CREATE, path);
+        }
+      }
 
       setShowCreateForm(false);
       setNewEmail('');
+      setNewPassword('');
       setNewDisplayName('');
       setNewStoreName('');
       setNewContactInfo('');
       setNewNotes('');
-      onNotify(`تم إنشاء وإضافة حساب المشترك (${cleanStore}) بنجاح.`, 'success');
-    } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, path);
+      onNotify(`تم إنشاء وتفعيل حساب المشترك (${cleanStore}) بنجاح.`, 'success');
     } finally {
       setIsSubmittingCreate(false);
     }
   };
 
-  // Owner Action: Delete an account
   const handleDeleteAccount = async (target: UserAccountProfile) => {
     if (target.email === OWNER_EMAIL) return;
+
+    if (sessionToken) {
+      const res = await fetch(buildBackendUrl(`/api/admin/accounts/${target.uid}`), {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${sessionToken}`,
+        },
+      });
+      const data = await res.json();
+      if (data.success) {
+        setConfirmDeleteUid(null);
+        if (onRefreshServerAccounts) onRefreshServerAccounts(data.accounts);
+        onNotify(`تم حذف حساب (${target.storeName}) نهائياً.`, 'info');
+      } else {
+        onNotify(data.error || 'تعذر حذف الحساب.', 'error');
+      }
+      return;
+    }
+
     const path = `users/${target.uid}`;
     try {
       await deleteDoc(doc(db, 'users', target.uid));
@@ -355,11 +444,12 @@ export const AdminAccountsView: React.FC<AdminAccountsViewProps> = ({
     setEditStoreName(acc.storeName);
     setEditContactInfo(acc.contactInfo || '');
     setEditNotes(acc.notes || '');
+    setEditNewPassword('');
   };
 
   return (
     <div className="space-y-5 text-xs">
-      {/* Top Banner: Current User Identity & Owner Control Center */}
+      {/* Top Banner */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-6 shadow-sm">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="flex items-start sm:items-center gap-3.5">
@@ -376,7 +466,7 @@ export const AdminAccountsView: React.FC<AdminAccountsViewProps> = ({
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-base sm:text-lg font-extrabold text-white">
                   {isOwner
-                    ? 'لوحة تحكم المدير المالك — إدارة الحسابات والاشتراكات'
+                    ? 'إدارة الحسابات والمشتركين'
                     : 'بيانات حسابك واشتراكك في المنصة'}
                 </h2>
                 <span
@@ -386,13 +476,13 @@ export const AdminAccountsView: React.FC<AdminAccountsViewProps> = ({
                       : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
                   }`}
                 >
-                  {isOwner ? 'المدير المالك (Owner Admin)' : 'مشترك معتمد (Active)'}
+                  {isOwner ? 'إدارة المنصة' : 'مشترك نشط'}
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-1">
                 {isOwner
-                  ? `أنت مسجل الدخول بصفتك المدير المالك (${currentUserProfile.email}). يمكنك تفعيل أو إيقاف حسابات المتاجر وتحديد باقاتهم وصلاحياتهم بالزمن الفعلي.`
-                  : `مرحباً بك (${currentUserProfile.displayName} - ${currentUserProfile.storeName}). اشتراكك مفعل ومعتمد من إدارة المنصة.`}
+                  ? 'يمكنك من هنا مراجعة وتفعيل حسابات المتاجر، إنشاء حسابات جديدة بكلمات مرور، أو إيقاف وتمديد الاشتراكات.'
+                  : `مرحباً بك (${currentUserProfile.displayName} - ${currentUserProfile.storeName}). اشتراكك مفعل ومعتمد.`}
               </p>
             </div>
           </div>
@@ -405,7 +495,7 @@ export const AdminAccountsView: React.FC<AdminAccountsViewProps> = ({
                 className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold flex items-center gap-1.5 transition-colors shadow-sm"
               >
                 <Plus className="w-4 h-4" />
-                <span>إضافة حساب مشترك جديد</span>
+                <span>إنشاء حساب مشترك جديد</span>
               </button>
             )}
 
@@ -463,7 +553,7 @@ export const AdminAccountsView: React.FC<AdminAccountsViewProps> = ({
                   {stats.pending}
                 </span>
                 {stats.pending > 0 && (
-                  <span className="text-[10px] font-bold text-amber-400">بحاجة لموافقتك</span>
+                  <span className="text-[10px] font-bold text-amber-400">طلب جديد</span>
                 )}
               </div>
             </div>
@@ -509,7 +599,7 @@ export const AdminAccountsView: React.FC<AdminAccountsViewProps> = ({
         </div>
       )}
 
-      {/* Owner Modal / Drawer Form: Create Pre-Provisioned Subscriber Account */}
+      {/* Owner Form: Create New Subscriber Account Directly */}
       {isOwner && showCreateForm && (
         <form
           onSubmit={handleCreateSubscriberAccount}
@@ -519,7 +609,7 @@ export const AdminAccountsView: React.FC<AdminAccountsViewProps> = ({
             <div className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-emerald-400" />
               <h3 className="text-sm font-extrabold text-white">
-                إضافة وتفعيل حساب مشترك جديد من قِبل المدير المالك
+                إنشاء وتفعيل حساب مشترك جديد
               </h3>
             </div>
             <button
@@ -564,7 +654,7 @@ export const AdminAccountsView: React.FC<AdminAccountsViewProps> = ({
 
             <div>
               <label className="block text-[11px] font-bold text-slate-300 mb-1">
-                البريد الإلكتروني (Google) *
+                البريد الإلكتروني للدخول *
               </label>
               <input
                 type="email"
@@ -572,7 +662,7 @@ export const AdminAccountsView: React.FC<AdminAccountsViewProps> = ({
                 maxLength={ACCOUNT_CONSTRAINTS.EMAIL_MAX}
                 value={newEmail}
                 onChange={(e) => setNewEmail(e.target.value)}
-                placeholder="merchant@gmail.com"
+                placeholder="merchant@company.com"
                 dir="ltr"
                 className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 focus:outline-none focus:border-emerald-500 font-mono-numbers"
               />
@@ -580,7 +670,22 @@ export const AdminAccountsView: React.FC<AdminAccountsViewProps> = ({
 
             <div>
               <label className="block text-[11px] font-bold text-slate-300 mb-1">
-                وسيلة التواصل (واتساب / تيليجرام)
+                كلمة المرور الابتدائية للمشترك *
+              </label>
+              <input
+                type="text"
+                required
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="6 أحرف أو أرقام على الأقل"
+                dir="ltr"
+                className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 focus:outline-none focus:border-emerald-500 font-mono-numbers"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                رقم الهاتف / واتساب
               </label>
               <input
                 type="text"
@@ -595,31 +700,31 @@ export const AdminAccountsView: React.FC<AdminAccountsViewProps> = ({
 
             <div>
               <label className="block text-[11px] font-bold text-slate-300 mb-1">
-                باقة الاشتراك
+                نوع الباقة
               </label>
               <select
                 value={newPlanTier}
                 onChange={(e) => setNewPlanTier(e.target.value as SubscriptionPlanTier)}
                 className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 focus:outline-none focus:border-emerald-500"
               >
-                <option value="starter">Starter ($29/شهرياً)</option>
-                <option value="pro">Pro الاحترافية ($59/شهرياً)</option>
-                <option value="enterprise">Enterprise الشركات ($129/شهرياً)</option>
+                <option value="starter">Starter</option>
+                <option value="pro">Pro</option>
+                <option value="enterprise">Enterprise</option>
               </select>
             </div>
 
             <div>
               <label className="block text-[11px] font-bold text-slate-300 mb-1">
-                حالة الحساب الابتدائية
+                حالة الحساب
               </label>
               <select
                 value={newStatus}
                 onChange={(e) => setNewStatus(e.target.value as UserAccountStatus)}
                 className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 focus:outline-none focus:border-emerald-500"
               >
-                <option value="active">نشط ومفعل فوراً (Active)</option>
-                <option value="pending">بانتظار التفعيل (Pending)</option>
-                <option value="suspended">موقوف (Suspended)</option>
+                <option value="active">نشط ومفعل فوراً</option>
+                <option value="pending">بانتظار التفعيل</option>
+                <option value="suspended">موقوف</option>
               </select>
             </div>
 
@@ -637,20 +742,6 @@ export const AdminAccountsView: React.FC<AdminAccountsViewProps> = ({
                 <option value={365}>سنة كاملة (365 يوماً)</option>
                 <option value={9999}>اشتراك دائم مفتوح</option>
               </select>
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-bold text-slate-300 mb-1">
-                ملاحظات إدارية (تظهر للمالك فقط)
-              </label>
-              <input
-                type="text"
-                maxLength={ACCOUNT_CONSTRAINTS.NOTES_MAX}
-                value={newNotes}
-                onChange={(e) => setNewNotes(e.target.value)}
-                placeholder="مثال: تم تحويل رسوم الاشتراك البنكي"
-                className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 focus:outline-none focus:border-emerald-500"
-              />
             </div>
           </div>
 
@@ -691,7 +782,6 @@ export const AdminAccountsView: React.FC<AdminAccountsViewProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {/* Status Filter Pills */}
             <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
               {(
                 [
@@ -716,16 +806,15 @@ export const AdminAccountsView: React.FC<AdminAccountsViewProps> = ({
               ))}
             </div>
 
-            {/* Plan Filter */}
             <select
               value={planFilter}
               onChange={(e) => setPlanFilter(e.target.value as 'all' | SubscriptionPlanTier)}
               className="px-3 py-1.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-200 text-[11px] font-bold focus:outline-none"
             >
               <option value="all">كل الباقات</option>
-              <option value="starter">باقة Starter</option>
-              <option value="pro">باقة Pro</option>
-              <option value="enterprise">باقة Enterprise</option>
+              <option value="starter">Starter</option>
+              <option value="pro">Pro</option>
+              <option value="enterprise">Enterprise</option>
             </select>
           </div>
         </div>
@@ -738,9 +827,6 @@ export const AdminAccountsView: React.FC<AdminAccountsViewProps> = ({
             {isOwner
               ? `قائمة الحسابات المسجلة (${filteredAccounts.length} من ${accounts.length})`
               : 'تفاصيل حسابك المسجل'}
-          </span>
-          <span className="text-[11px] text-slate-400">
-            تزامن فوري عبر Firestore Real-Time
           </span>
         </div>
 
@@ -771,7 +857,6 @@ export const AdminAccountsView: React.FC<AdminAccountsViewProps> = ({
                         <span>{acc.storeName}</span>
                       </span>
 
-                      {/* Status Badge */}
                       {acc.accountStatus === 'active' ? (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
                           <CheckCircle2 className="w-3 h-3" />
@@ -789,7 +874,6 @@ export const AdminAccountsView: React.FC<AdminAccountsViewProps> = ({
                         </span>
                       )}
 
-                      {/* Role Badge */}
                       <span
                         className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${
                           isAccountOwner
@@ -800,19 +884,17 @@ export const AdminAccountsView: React.FC<AdminAccountsViewProps> = ({
                         }`}
                       >
                         {isAccountOwner
-                          ? 'المدير المالك (Owner)'
+                          ? 'مدير المنصة'
                           : acc.role === 'admin'
-                          ? 'مدير مساعد (Admin)'
+                          ? 'مدير مساعد'
                           : 'تاجر مشترك'}
                       </span>
 
-                      {/* Plan Badge */}
                       <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                        {planMeta.nameAr} ({planMeta.priceLabel})
+                        {planMeta.nameAr}
                       </span>
                     </div>
 
-                    {/* Metadata Strip */}
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-slate-400 text-[11px]">
                       <span className="flex items-center gap-1 text-slate-200 font-medium">
                         <span>المسؤول:</span>
@@ -845,7 +927,6 @@ export const AdminAccountsView: React.FC<AdminAccountsViewProps> = ({
                   <div className="flex flex-wrap items-center gap-2 shrink-0">
                     {isOwner && !isAccountOwner && (
                       <>
-                        {/* Approve / Activate vs Suspend Buttons */}
                         {acc.accountStatus !== 'active' ? (
                           <button
                             type="button"
@@ -866,7 +947,6 @@ export const AdminAccountsView: React.FC<AdminAccountsViewProps> = ({
                           </button>
                         )}
 
-                        {/* Change Plan Selector */}
                         <select
                           value={acc.planTier}
                           onChange={(e) =>
@@ -880,7 +960,6 @@ export const AdminAccountsView: React.FC<AdminAccountsViewProps> = ({
                           <option value="enterprise">Enterprise</option>
                         </select>
 
-                        {/* Quick Extend Subscription Selector */}
                         <select
                           defaultValue=""
                           onChange={(e) => {
@@ -902,7 +981,6 @@ export const AdminAccountsView: React.FC<AdminAccountsViewProps> = ({
                           <option value={9999}>اشتراك مفتوح دائم</option>
                         </select>
 
-                        {/* Role Selector */}
                         <select
                           value={acc.role}
                           onChange={(e) =>
@@ -917,17 +995,15 @@ export const AdminAccountsView: React.FC<AdminAccountsViewProps> = ({
                       </>
                     )}
 
-                    {/* Edit Details Button */}
                     <button
                       type="button"
                       onClick={() => (isEditing ? setEditingUid(null) : startEditing(acc))}
                       className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
-                      title="تعديل بيانات المتجر والملاحظات"
+                      title="تعديل بيانات الحساب أو تغيير كلمة المرور"
                     >
                       <Edit3 className="w-3.5 h-3.5" />
                     </button>
 
-                    {/* Delete Account Button (Owner only, non-owner target) */}
                     {isOwner && !isAccountOwner && (
                       <>
                         {confirmDeleteUid === acc.uid ? (
@@ -962,7 +1038,7 @@ export const AdminAccountsView: React.FC<AdminAccountsViewProps> = ({
                   </div>
                 </div>
 
-                {/* Inline Edit Panel */}
+                {/* Inline Edit Panel (Includes Password Reset) */}
                 {isEditing && (
                   <div className="mt-4 pt-3 border-t border-slate-800 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 bg-slate-950/70 p-3.5 rounded-xl">
                     <div>
@@ -987,7 +1063,7 @@ export const AdminAccountsView: React.FC<AdminAccountsViewProps> = ({
                     </div>
                     <div>
                       <label className="block text-[10px] text-slate-400 mb-1">
-                        رقم التواصل / التيليجرام:
+                        رقم التواصل:
                       </label>
                       <input
                         type="text"
@@ -998,10 +1074,24 @@ export const AdminAccountsView: React.FC<AdminAccountsViewProps> = ({
                         className="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-800 rounded-lg text-slate-100 font-mono-numbers"
                       />
                     </div>
+                    <div>
+                      <label className="block text-[10px] text-slate-400 mb-1 flex items-center gap-1">
+                        <KeyRound className="w-3 h-3 text-indigo-400" />
+                        <span>كلمة مرور جديدة (اختياري):</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={editNewPassword}
+                        onChange={(e) => setEditNewPassword(e.target.value)}
+                        placeholder="اتركه فارغاً لعدم التغيير"
+                        dir="ltr"
+                        className="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-800 rounded-lg text-slate-100 font-mono-numbers"
+                      />
+                    </div>
                     {isOwner && (
-                      <div>
+                      <div className="sm:col-span-2 lg:col-span-3">
                         <label className="block text-[10px] text-slate-400 mb-1">
-                          ملاحظات المدير المالك:
+                          ملاحظات إدارية:
                         </label>
                         <input
                           type="text"
@@ -1012,7 +1102,7 @@ export const AdminAccountsView: React.FC<AdminAccountsViewProps> = ({
                         />
                       </div>
                     )}
-                    <div className="sm:col-span-2 lg:col-span-4 flex justify-end gap-2">
+                    <div className="sm:col-span-2 lg:col-span-1 flex items-end justify-end gap-2">
                       <button
                         type="button"
                         onClick={() => setEditingUid(null)}
@@ -1026,7 +1116,7 @@ export const AdminAccountsView: React.FC<AdminAccountsViewProps> = ({
                         className="px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold flex items-center gap-1"
                       >
                         <Save className="w-3.5 h-3.5" />
-                        <span>حفظ التعديلات</span>
+                        <span>حفظ</span>
                       </button>
                     </div>
                   </div>

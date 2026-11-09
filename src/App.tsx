@@ -116,8 +116,11 @@ export default function App() {
     localStorage.setItem('shadx_api_token', apiToken);
   }, [apiToken]);
 
-  // Firebase Auth & Account Management State
+  // Firebase Auth & Server Session Account Management State
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
+  const [sessionToken, setSessionToken] = useState<string | null>(
+    () => localStorage.getItem('shadx_session_token')
+  );
   const [isAuthReady, setIsAuthReady] = useState<boolean>(false);
   const [isSigningIn, setIsSigningIn] = useState<boolean>(false);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -130,14 +133,75 @@ export default function App() {
     planTier: SubscriptionPlanTier;
   } | null>(null);
 
+  const fetchServerAdminAccounts = useCallback(async (token: string) => {
+    try {
+      const res = await fetch(buildBackendUrl('/api/admin/accounts'), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success && Array.isArray(data.accounts)) {
+        setAllAccounts(data.accounts);
+      }
+    } catch {
+      // Ignore transient network errors
+    }
+  }, []);
+
+  // 0. Restore Server Session Token on boot (and poll while pending or admin)
+  useEffect(() => {
+    if (!sessionToken) return;
+
+    let cancelled = false;
+    const verifySession = async () => {
+      try {
+        const res = await fetch(buildBackendUrl('/api/auth/me'), {
+          headers: { Authorization: `Bearer ${sessionToken}` },
+        });
+        const data = await res.json();
+        if (cancelled) return;
+        if (data.success && data.profile) {
+          setCurrentUserProfile(data.profile);
+          if (
+            data.profile.role === 'owner' ||
+            data.profile.role === 'admin' ||
+            data.profile.email === OWNER_EMAIL
+          ) {
+            fetchServerAdminAccounts(sessionToken);
+          } else {
+            setAllAccounts([data.profile]);
+          }
+        } else {
+          localStorage.removeItem('shadx_session_token');
+          setSessionToken(null);
+          if (!auth.currentUser) {
+            setCurrentUserProfile(null);
+          }
+        }
+      } catch {
+        // Keep existing state if offline momentarily
+      } finally {
+        if (!cancelled) setIsAuthReady(true);
+      }
+    };
+
+    verifySession();
+    const pollTimer = setInterval(verifySession, 6000);
+    return () => {
+      cancelled = true;
+      clearInterval(pollTimer);
+    };
+  }, [sessionToken, fetchServerAdminAccounts]);
+
   // 1. Track Firebase Auth state
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setFirebaseUser(user);
       if (!user) {
-        setCurrentUserProfile(null);
-        setAllAccounts([]);
-        setIsAuthReady(true);
+        if (!localStorage.getItem('shadx_session_token')) {
+          setCurrentUserProfile(null);
+          setAllAccounts([]);
+          setIsAuthReady(true);
+        }
         return;
       }
 
@@ -156,12 +220,12 @@ export default function App() {
             'user@example.com'
           );
           const safeDisplayName = sanitizeString(
-            draft?.displayName || user.displayName || (isOwnerAccount ? 'المدير المالك' : 'مشترك جديد'),
+            draft?.displayName || user.displayName || (isOwnerAccount ? 'المدير العام' : 'مشترك جديد'),
             ACCOUNT_CONSTRAINTS.DISPLAY_NAME_MAX,
             'مشترك جديد'
           );
           const safeStoreName = sanitizeString(
-            draft?.storeName || (isOwnerAccount ? 'الإدارة العامة - ShadX' : 'متجر رقمي'),
+            draft?.storeName || (isOwnerAccount ? 'إدارة المنصة الرئيسية' : 'متجر رقمي'),
             ACCOUNT_CONSTRAINTS.STORE_NAME_MAX,
             'متجر رقمي'
           );
@@ -181,7 +245,7 @@ export default function App() {
             accountStatus: isOwnerAccount ? 'active' : 'pending',
             planTier: isOwnerAccount ? 'enterprise' : draft?.planTier || 'pro',
             subscriptionEndsAt: isOwnerAccount ? 'اشتراك دائم (مفتوح)' : 'بانتظار التفعيل',
-            notes: isOwnerAccount ? 'حساب المدير المالك الرئيسي' : '',
+            notes: isOwnerAccount ? 'الحساب الرئيسي لمالك المنصة' : '',
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
           });
@@ -215,7 +279,7 @@ export default function App() {
     return () => unsubscribe();
   }, [isAuthReady, firebaseUser]);
 
-  // 3. Real-time listener on all accounts (/users) when signed in as Bootstrapped Owner
+  // 3. Real-time listener on all accounts (/users) when signed in via Firebase as Bootstrapped Owner
   useEffect(() => {
     if (!isAuthReady || !firebaseUser) return;
     if (firebaseUser.email !== OWNER_EMAIL) {
@@ -241,6 +305,81 @@ export default function App() {
     return () => unsubscribe();
   }, [isAuthReady, firebaseUser, currentUserProfile]);
 
+  // Email & Password Login Handler
+  const handleEmailLogin = async (email: string, password: string) => {
+    setAuthError(null);
+    setIsSigningIn(true);
+    try {
+      const res = await fetch(buildBackendUrl('/api/auth/login'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        setAuthError(data.error || 'البريد الإلكتروني أو كلمة المرور غير صحيحة.');
+        return;
+      }
+      localStorage.setItem('shadx_session_token', data.token);
+      setSessionToken(data.token);
+      setCurrentUserProfile(data.profile);
+      if (
+        data.profile.role === 'owner' ||
+        data.profile.role === 'admin' ||
+        data.profile.email === OWNER_EMAIL
+      ) {
+        fetchServerAdminAccounts(data.token);
+      } else {
+        setAllAccounts([data.profile]);
+      }
+    } catch (err: any) {
+      setAuthError('تعذر الاتصال بخادم المصادقة. يرجى المحاولة مرة أخرى.');
+    } finally {
+      setIsSigningIn(false);
+    }
+  };
+
+  // Email & Password Registration Handler
+  const handleEmailRegister = async (payload: {
+    displayName: string;
+    storeName: string;
+    email: string;
+    password: string;
+    contactInfo: string;
+    planTier: SubscriptionPlanTier;
+  }) => {
+    setAuthError(null);
+    setIsSigningIn(true);
+    try {
+      const res = await fetch(buildBackendUrl('/api/auth/register'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        setAuthError(data.error || 'تعذر إنشاء الحساب.');
+        return;
+      }
+      localStorage.setItem('shadx_session_token', data.token);
+      setSessionToken(data.token);
+      setCurrentUserProfile(data.profile);
+      if (
+        data.profile.role === 'owner' ||
+        data.profile.role === 'admin' ||
+        data.profile.email === OWNER_EMAIL
+      ) {
+        fetchServerAdminAccounts(data.token);
+      } else {
+        setAllAccounts([data.profile]);
+      }
+    } catch (err: any) {
+      setAuthError('تعذر الاتصال بخادم التسجيل. يرجى المحاولة مرة أخرى.');
+    } finally {
+      setIsSigningIn(false);
+    }
+  };
+
   const handleGoogleAuth = async (registrationDraft?: {
     displayName: string;
     storeName: string;
@@ -256,18 +395,35 @@ export default function App() {
       await signInWithPopup(auth, googleProvider);
     } catch (err: any) {
       console.warn('Google sign-in error:', err);
-      setAuthError(
-        err?.message?.includes('popup-closed-by-user')
-          ? 'تم إغلاق نافذة تسجيل الدخول قبل إتمام العملية. يرجى المحاولة مرة أخرى.'
-          : `تعذر إتمام تسجيل الدخول (${err?.code || err?.message || 'خطأ غير معروف'}).`
-      );
+      const errCode = String(err?.code || err?.message || '');
+      if (errCode.includes('unauthorized-domain')) {
+        const currentHost =
+          typeof window !== 'undefined' ? window.location.hostname : '';
+        setAuthError(
+          `تعذر إتمام تسجيل الدخول عبر Google بسبب عدم إضافة النطاق الحالي (${currentHost}) في قائمة Authorized Domains داخل Firebase (auth/unauthorized-domain). يمكنك إضافة النطاق من الدليل أدناه أو تسجيل الدخول مباشرة بالبريد وكلمة المرور.`
+        );
+      } else if (errCode.includes('popup-closed-by-user')) {
+        setAuthError('تم إغلاق نافذة تسجيل الدخول قبل إتمام العملية. يرجى المحاولة مرة أخرى.');
+      } else {
+        setAuthError('يرجى تسجيل الدخول باستخدام البريد الإلكتروني وكلمة المرور أعلاه.');
+      }
     } finally {
       setIsSigningIn(false);
     }
   };
 
   const handleSignOutUser = async () => {
-    await signOut(auth);
+    if (sessionToken) {
+      fetch(buildBackendUrl('/api/auth/logout'), {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${sessionToken}` },
+      }).catch(() => {});
+      localStorage.removeItem('shadx_session_token');
+      setSessionToken(null);
+    }
+    if (firebaseUser) {
+      await signOut(auth).catch(() => {});
+    }
     setCurrentUserProfile(null);
     setAllAccounts([]);
   };
@@ -277,6 +433,22 @@ export default function App() {
     storeName: string;
     contactInfo: string;
   }) => {
+    if (sessionToken) {
+      const res = await fetch(buildBackendUrl('/api/auth/profile'), {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${sessionToken}`,
+        },
+        body: JSON.stringify(updates),
+      });
+      const data = await res.json();
+      if (data.success && data.profile) {
+        setCurrentUserProfile(data.profile);
+      }
+      return;
+    }
+
     if (!firebaseUser) return;
     const path = `users/${firebaseUser.uid}`;
     try {
@@ -1560,13 +1732,15 @@ export default function App() {
   }
 
   // Gate the entire platform behind Authentication & Owner Approval
-  if (!firebaseUser || !currentUserProfile || currentUserProfile.accountStatus !== 'active') {
+  if (!currentUserProfile || currentUserProfile.accountStatus !== 'active') {
     return (
       <AuthGateView
         currentUserProfile={currentUserProfile}
-        authEmail={firebaseUser?.email || null}
+        authEmail={currentUserProfile?.email || firebaseUser?.email || null}
         isSigningIn={isSigningIn}
         authError={authError}
+        onEmailLogin={handleEmailLogin}
+        onEmailRegister={handleEmailRegister}
         onGoogleAuth={handleGoogleAuth}
         onSignOut={handleSignOutUser}
         onUpdateOwnMerchantProfile={handleUpdateOwnMerchantProfile}
@@ -2039,11 +2213,25 @@ export default function App() {
             <AdminAccountsView
               currentUserProfile={currentUserProfile}
               accounts={
-                firebaseUser.email === OWNER_EMAIL ? allAccounts : [currentUserProfile]
+                currentUserProfile.email === OWNER_EMAIL ||
+                currentUserProfile.role === 'owner' ||
+                currentUserProfile.role === 'admin'
+                  ? allAccounts
+                  : [currentUserProfile]
               }
               isOwner={
-                firebaseUser.email === OWNER_EMAIL || currentUserProfile.role === 'owner'
+                currentUserProfile.email === OWNER_EMAIL ||
+                currentUserProfile.role === 'owner' ||
+                currentUserProfile.role === 'admin'
               }
+              sessionToken={sessionToken}
+              onRefreshServerAccounts={(updatedList) => {
+                if (updatedList) {
+                  setAllAccounts(updatedList);
+                } else if (sessionToken) {
+                  fetchServerAdminAccounts(sessionToken);
+                }
+              }}
               onSignOut={handleSignOutUser}
               onNotify={(text, type) => setNotification({ text, type })}
             />
