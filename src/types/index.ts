@@ -167,6 +167,7 @@ export interface AlertRuleConfig {
   telegramNotifyOnNewOrAvailableProducts: boolean;
   telegramFormat?: 'brief' | 'detailed';
   telegramInteractiveButtons?: boolean;
+  alertSounds?: Partial<Record<AlertType, string>>;
 }
 
 export interface SyncScheduleConfig {

@@ -426,14 +426,32 @@ export const BulkCartModal: React.FC<BulkCartModalProps> = ({
                               </div>
                             </td>
                             <td className="p-3">
-                              <input
-                                type="number"
-                                min={1}
-                                max={999}
-                                value={item.qty}
-                                onChange={(e) => handleUpdateItemQty(item.product.id, Number(e.target.value))}
-                                className="w-16 px-2.5 py-1.5 bg-slate-900 border border-slate-800 rounded-lg text-center font-mono-numbers text-white focus:outline-none focus:border-indigo-500"
-                              />
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateItemQty(item.product.id, item.qty - 1)}
+                                  className="w-8 h-8 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-200 flex items-center justify-center font-bold active:scale-95 transition-all text-sm cursor-pointer select-none"
+                                  title="إنقاص الكمية"
+                                >
+                                  -
+                                </button>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  max={999}
+                                  value={item.qty}
+                                  onChange={(e) => handleUpdateItemQty(item.product.id, Number(e.target.value))}
+                                  className="w-14 h-8 px-1 bg-slate-900 border border-slate-800 rounded-lg text-center font-mono-numbers text-white font-bold text-xs focus:outline-none focus:border-indigo-500"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateItemQty(item.product.id, item.qty + 1)}
+                                  className="w-8 h-8 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-200 flex items-center justify-center font-bold active:scale-95 transition-all text-sm cursor-pointer select-none"
+                                  title="زيادة الكمية"
+                                >
+                                  +
+                                </button>
+                              </div>
                             </td>
                             <td className="p-3">
                               <div className="space-y-1.5 min-w-[200px]">
@@ -472,57 +490,6 @@ export const BulkCartModal: React.FC<BulkCartModalProps> = ({
                     </table>
                   </div>
 
-                  {/* Summary Bar */}
-                  <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 flex flex-wrap items-center justify-between gap-4">
-                    <div className="flex items-center gap-6">
-                      <div>
-                        <span className="text-slate-400 block text-[11px]">إجمالي القطع:</span>
-                        <span className="text-sm font-extrabold font-mono-numbers text-white">
-                          {totals.totalItemsCount} قطعة
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-slate-400 block text-[11px]">إجمالي تكلفة الشراء:</span>
-                        <span className="text-sm font-extrabold font-mono-numbers text-emerald-400">
-                          ${totals.totalCost}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-slate-400 block text-[11px]">الربح المتوقع:</span>
-                        <span className="text-sm font-extrabold font-mono-numbers text-indigo-400">
-                          ${totals.netProfit} ({totals.profitMargin}%)
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      {onClearSelection && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setCartItems([]);
-                            onClearSelection();
-                          }}
-                          className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium transition-colors"
-                        >
-                          تفريغ السلة
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={handleExecuteBulkOrder}
-                        disabled={isExecuting || cartItems.length === 0}
-                        className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-extrabold flex items-center gap-2 transition-all shadow-lg shadow-emerald-600/25 disabled:opacity-50 cursor-pointer"
-                      >
-                        {isExecuting ? (
-                          <RefreshCw className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <Send className="w-4 h-4" />
-                        )}
-                        <span>{isExecuting ? 'جارِ الإرسال للمزود...' : 'إرسال سلة الشراء للمزود عبر الـ API'}</span>
-                      </button>
-                    </div>
-                  </div>
                 </div>
               )}
             </>
@@ -611,6 +578,60 @@ export const BulkCartModal: React.FC<BulkCartModalProps> = ({
             </div>
           )}
         </div>
+
+        {/* Sticky Pinned Footer Summary & Checkout Bar (Visible on 'cart' tab when items exist) */}
+        {activeTab === 'cart' && cartItems.length > 0 && (
+          <div className="shrink-0 border-t border-slate-800 bg-slate-950/95 backdrop-blur-md p-4 z-20 shadow-2xl flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-6 text-xs">
+              <div>
+                <span className="text-slate-400 block text-[10px]">إجمالي القطع:</span>
+                <span className="text-sm font-extrabold font-mono-numbers text-white">
+                  {totals.totalItemsCount} قطعة
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[10px]">إجمالي التكلفة:</span>
+                <span className="text-sm font-extrabold font-mono-numbers text-emerald-400">
+                  ${totals.totalCost}
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[10px]">الربح المتوقع:</span>
+                <span className="text-sm font-extrabold font-mono-numbers text-indigo-400">
+                  ${totals.netProfit} ({totals.profitMargin}%)
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {onClearSelection && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCartItems([]);
+                    onClearSelection();
+                  }}
+                  className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-xs transition-colors cursor-pointer"
+                >
+                  تفريغ السلة
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={handleExecuteBulkOrder}
+                disabled={isExecuting || cartItems.length === 0}
+                className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-extrabold flex items-center gap-2 transition-all shadow-lg shadow-emerald-600/25 disabled:opacity-50 cursor-pointer text-xs"
+              >
+                {isExecuting ? (
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Send className="w-4 h-4" />
+                )}
+                <span>{isExecuting ? 'جارِ الإرسال للمزود...' : 'إرسال سلة الشراء للمزود عبر الـ API'}</span>
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

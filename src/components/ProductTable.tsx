@@ -52,10 +52,69 @@ export const ProductTable: React.FC<ProductTableProps> = ({
   onRefresh,
 }) => {
   const [copiedId, setCopiedId] = useState<string | number | null>(null);
-  const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
+  const [viewMode, setViewMode] = useState<'table' | 'cards' | 'density'>(() => {
+    return (localStorage.getItem('shadx_product_table_view_mode') as any) || 'table';
+  });
+
+  const handleViewModeChange = (mode: 'table' | 'cards' | 'density') => {
+    setViewMode(mode);
+    localStorage.setItem('shadx_product_table_view_mode', mode);
+  };
   const [expandedRowIds, setExpandedRowIds] = useState<Set<string | number>>(new Set());
   const [rawModalProduct, setRawModalProduct] = useState<CatalogProduct | null>(null);
   const tableScrollRef = useRef<HTMLDivElement | null>(null);
+
+  // Sorting preference state with localStorage persistence
+  const [sortBy, setSortBy] = useState<string>(() => {
+    return localStorage.getItem('shadx_product_table_sort') || 'default';
+  });
+
+  const handleSortChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value;
+    setSortBy(val);
+    localStorage.setItem('shadx_product_table_sort', val);
+  };
+
+  const sortedProducts = React.useMemo(() => {
+    const list = [...products];
+    switch (sortBy) {
+      case 'date_added_desc':
+        return list.sort((a, b) => {
+          const timeA = (a as any).dateAdded ? new Date((a as any).dateAdded).getTime() : Number(a.id) || 0;
+          const timeB = (b as any).dateAdded ? new Date((b as any).dateAdded).getTime() : Number(b.id) || 0;
+          return timeB - timeA;
+        });
+      case 'date_added_asc':
+        return list.sort((a, b) => {
+          const timeA = (a as any).dateAdded ? new Date((a as any).dateAdded).getTime() : Number(a.id) || 0;
+          const timeB = (b as any).dateAdded ? new Date((b as any).dateAdded).getTime() : Number(b.id) || 0;
+          return timeA - timeB;
+        });
+      case 'profitability_desc':
+        return list.sort((a, b) => {
+          const pA = a.profitMarginPercent !== undefined ? a.profitMarginPercent : (a.suggestedSellPriceUsd - a.costPriceUsd);
+          const pB = b.profitMarginPercent !== undefined ? b.profitMarginPercent : (b.suggestedSellPriceUsd - b.costPriceUsd);
+          return pB - pA;
+        });
+      case 'profitability_asc':
+        return list.sort((a, b) => {
+          const pA = a.profitMarginPercent !== undefined ? a.profitMarginPercent : (a.suggestedSellPriceUsd - a.costPriceUsd);
+          const pB = b.profitMarginPercent !== undefined ? b.profitMarginPercent : (b.suggestedSellPriceUsd - b.costPriceUsd);
+          return pA - pB;
+        });
+      case 'availability':
+        return list.sort((a, b) => {
+          if (a.isAvailable === b.isAvailable) return 0;
+          return a.isAvailable ? -1 : 1;
+        });
+      case 'price_asc':
+        return list.sort((a, b) => a.costPriceUsd - b.costPriceUsd);
+      case 'price_desc':
+        return list.sort((a, b) => b.costPriceUsd - a.costPriceUsd);
+      default:
+        return list;
+    }
+  }, [products, sortBy]);
 
   // Pull to Refresh state
   const [touchStartY, setTouchStartY] = useState<number>(0);
@@ -218,36 +277,73 @@ export const ProductTable: React.FC<ProductTableProps> = ({
         </div>
       )}
 
-      {/* View Mode Switcher Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+      {/* View Mode & Sorting Toolbar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 text-xs bg-slate-900 border border-slate-800 p-2.5 rounded-xl">
         <span className="text-slate-400">
           اضغط على أي صف <strong className="text-slate-200">لتوسيع التفاصيل الكاملة</strong>، أو اضغط على أيقونة <strong className="text-indigo-400">الربط</strong> لفتح الحاسبة وأكواد الـ API
         </span>
-        <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 p-1 rounded-xl shrink-0">
-          <button
-            type="button"
-            onClick={() => setViewMode('table')}
-            className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-bold transition-colors ${
-              viewMode === 'table'
-                ? 'bg-indigo-600 text-white shadow-xs'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <TableIcon className="w-3.5 h-3.5" />
-            <span>جدول متجاوب</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setViewMode('cards')}
-            className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-bold transition-colors ${
-              viewMode === 'cards'
-                ? 'bg-indigo-600 text-white shadow-xs'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <LayoutGrid className="w-3.5 h-3.5" />
-            <span>بطاقات</span>
-          </button>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Sorting Dropdown */}
+          <div className="flex items-center gap-1.5 bg-slate-950 border border-slate-800 px-2.5 py-1.5 rounded-xl">
+            <SlidersHorizontal className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+            <span className="text-slate-400 text-[11px] whitespace-nowrap">فرز حسب:</span>
+            <select
+              value={sortBy}
+              onChange={handleSortChange}
+              className="bg-transparent text-white font-medium text-xs focus:outline-none cursor-pointer pr-1"
+            >
+              <option value="default" className="bg-slate-950 text-slate-200">الترتيب الافتراضي (حسب المعرف)</option>
+              <option value="date_added_desc" className="bg-slate-950 text-slate-200">الأحدث إضافة (تاريخ الإضافة)</option>
+              <option value="date_added_asc" className="bg-slate-950 text-slate-200">الأقدم إضافة</option>
+              <option value="profitability_desc" className="bg-slate-950 text-slate-200">الأعلى ربحية (هامش الربح %)</option>
+              <option value="profitability_asc" className="bg-slate-950 text-slate-200">الأقل ربحية</option>
+              <option value="availability" className="bg-slate-950 text-slate-200">التوافر (المتوفر أولاً)</option>
+              <option value="price_asc" className="bg-slate-950 text-slate-200">سعر التكلفة: الأقل للأعلى</option>
+              <option value="price_desc" className="bg-slate-950 text-slate-200">سعر التكلفة: الأعلى للأقل</option>
+            </select>
+          </div>
+
+          {/* View Mode Switcher */}
+          <div className="flex items-center gap-1 bg-slate-950 border border-slate-800 p-1 rounded-xl shrink-0">
+            <button
+              type="button"
+              onClick={() => handleViewModeChange('table')}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-bold transition-colors ${
+                viewMode === 'table'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <TableIcon className="w-3.5 h-3.5" />
+              <span>جدول متجاوب</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleViewModeChange('cards')}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-bold transition-colors ${
+                viewMode === 'cards'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span>بطاقات</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleViewModeChange('density')}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-bold transition-colors ${
+                viewMode === 'density'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+              title="عرض جدول البيانات المكثف لزيادة الكثافة وعدد المنتجات المرئية"
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5" />
+              <span>جدول مكثف (Density)</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -259,7 +355,7 @@ export const ProductTable: React.FC<ProductTableProps> = ({
             : 'hidden'
         }
       >
-        {products.map((product) => {
+        {sortedProducts.map((product) => {
           const isSelected = selectedIds.has(product.id);
           const profitUsd = product.suggestedSellPriceUsd - product.costPriceUsd;
           const profitPercent =
@@ -572,7 +668,7 @@ export const ProductTable: React.FC<ProductTableProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/80 text-slate-300">
-              {products.map((product) => {
+              {sortedProducts.map((product) => {
                 const isSelected = selectedIds.has(product.id);
                 const isExpanded = expandedRowIds.has(product.id);
                 const profitUsd = product.suggestedSellPriceUsd - product.costPriceUsd;
@@ -1113,6 +1209,103 @@ export const ProductTable: React.FC<ProductTableProps> = ({
                       </tr>
                     )}
                   </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* High-Density Table View (When user selects 'density') */}
+      <div
+        className={
+          viewMode === 'density'
+            ? 'bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm block'
+            : 'hidden'
+        }
+      >
+        <div className="overflow-x-auto overscroll-x-contain touch-pan-x scroll-smooth w-full">
+          <table className="w-full text-right text-[11px] border-collapse">
+            <thead>
+              <tr className="bg-slate-950 border-b border-slate-800 text-slate-400 font-semibold select-none">
+                <th className="py-1.5 px-2 w-8 text-center">
+                  <span className="sr-only">تحديد</span>
+                </th>
+                <th className="py-1.5 px-2 whitespace-nowrap">ID</th>
+                <th className="py-1.5 px-2.5 min-w-[140px]">اسم المنتج</th>
+                <th className="hidden md:table-cell py-1.5 px-2 whitespace-nowrap">التصنيف</th>
+                <th className="py-1.5 px-2 whitespace-nowrap text-left font-mono-numbers">التكلفة</th>
+                <th className="py-1.5 px-2 whitespace-nowrap text-left font-mono-numbers">البيع المقترح</th>
+                <th className="hidden lg:table-cell py-1.5 px-2 whitespace-nowrap text-center">الحالة</th>
+                <th className="py-1.5 px-2 text-center whitespace-nowrap">الإجراءات</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800/70 text-slate-300">
+              {sortedProducts.map((product) => {
+                const isSelected = selectedIds.has(product.id);
+                const profitUsd = product.suggestedSellPriceUsd - product.costPriceUsd;
+                const profitPercent =
+                  product.profitMarginPercent !== undefined
+                    ? product.profitMarginPercent
+                    : product.costPriceUsd > 0
+                    ? Number(((profitUsd / product.costPriceUsd) * 100).toFixed(1))
+                    : 0;
+
+                return (
+                  <tr
+                    key={product.id}
+                    onClick={() => onOpenProductDetail(product, false)}
+                    className={`transition-colors cursor-pointer hover:bg-slate-800/60 ${
+                      isSelected ? 'bg-indigo-950/40' : product.isLowMargin ? 'bg-rose-950/20' : ''
+                    }`}
+                  >
+                    <td className="py-1 px-2 text-center" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => onToggleSelect(product.id)}
+                        className="rounded bg-slate-950 border-slate-700 text-indigo-600 focus:ring-0 cursor-pointer w-3.5 h-3.5"
+                      />
+                    </td>
+                    <td className="py-1 px-2 whitespace-nowrap font-mono-numbers">
+                      <span className="font-semibold text-slate-100 bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800 text-[10px]">
+                        #{product.id}
+                      </span>
+                    </td>
+                    <td className="py-1 px-2.5">
+                      <div className="font-bold text-white truncate max-w-[220px]" title={product.name}>
+                        {product.name}
+                      </div>
+                    </td>
+                    <td className="hidden md:table-cell py-1 px-2 whitespace-nowrap text-slate-400 truncate max-w-[120px]">
+                      {product.category}
+                    </td>
+                    <td className="py-1 px-2 whitespace-nowrap text-left font-mono-numbers text-slate-200">
+                      ${product.costPriceUsd.toFixed(3)}
+                    </td>
+                    <td className="py-1 px-2 whitespace-nowrap text-left font-mono-numbers font-bold text-emerald-400">
+                      ${product.suggestedSellPriceUsd.toFixed(2)}
+                      <span className="text-[9px] text-emerald-500 mr-1 font-normal">
+                        ({profitPercent >= 0 ? `+${profitPercent}%` : `${profitPercent}%`})
+                      </span>
+                    </td>
+                    <td className="hidden lg:table-cell py-1 px-2 whitespace-nowrap text-center">
+                      {product.isAvailable ? (
+                        <span className="text-[10px] text-emerald-400 bg-emerald-950/50 px-1.5 py-0.2 rounded">متاح</span>
+                      ) : (
+                        <span className="text-[10px] text-rose-400 bg-rose-950/50 px-1.5 py-0.2 rounded">غير متوفر</span>
+                      )}
+                    </td>
+                    <td className="py-1 px-2 text-center" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        onClick={() => onOpenProductDetail(product, false)}
+                        className="px-2 py-0.5 bg-indigo-600/30 hover:bg-indigo-600 text-indigo-200 hover:text-white rounded text-[10px] font-bold transition-colors"
+                      >
+                        ربط
+                      </button>
+                    </td>
+                  </tr>
                 );
               })}
             </tbody>

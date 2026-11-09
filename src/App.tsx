@@ -129,7 +129,7 @@ export default function App() {
   const [sessionToken, setSessionToken] = useState<string | null>(
     () => localStorage.getItem('shadx_session_token')
   );
-  const [isAuthReady, setIsAuthReady] = useState<boolean>(false);
+  const [isAuthReady, setIsAuthReady] = useState<boolean>(true);
   const [isSigningIn, setIsSigningIn] = useState<boolean>(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [currentUserProfile, setCurrentUserProfile] = useState<UserAccountProfile | null>(null);
@@ -1265,6 +1265,7 @@ export default function App() {
               body: `${alertItem.productName} (#${alertItem.productId})\n${alertItem.message}`,
               tag: alertItem.id,
               playSound: idx === 0 && (alertRuleConfig.playSound ?? true),
+              soundType: alertRuleConfig.alertSounds?.[alertItem.type],
               onClick: () => {
                 setActiveSection('alerts');
               },
@@ -1279,6 +1280,7 @@ export default function App() {
                 body: `${firstAlert.productName} (#${firstAlert.productId})\n${firstAlert.message}`,
                 tag: firstAlert.id,
                 playSound: alertRuleConfig.playSound ?? true,
+                soundType: alertRuleConfig.alertSounds?.[firstAlert.type],
                 onClick: () => {
                   setActiveSection('alerts');
                 },

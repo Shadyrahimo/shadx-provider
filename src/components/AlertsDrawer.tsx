@@ -34,6 +34,7 @@ import {
   getDesktopNotificationPermission,
   requestDesktopNotificationPermission,
   triggerNativeDesktopNotification,
+  playAlertNotificationSound,
   DesktopPermissionState,
 } from '../utils/desktopNotifier';
 
@@ -709,6 +710,68 @@ export const AlertsDrawer: React.FC<AlertsDrawerProps> = ({
                       className="w-4 h-4 rounded accent-indigo-500 cursor-pointer"
                     />
                   </label>
+
+                  {/* Custom Alert Sounds Per Alert Type */}
+                  <div className="pt-2.5 mt-1 border-t border-slate-800">
+                    <div className="flex items-center justify-between pb-1.5">
+                      <span className="text-slate-100 font-semibold flex items-center gap-1.5 text-xs">
+                        <BellRing className="w-3.5 h-3.5 text-indigo-400" />
+                        <span>تخصيص أصوات التنبيه لكل نوع (Custom Alert Sounds)</span>
+                      </span>
+                    </div>
+                    <span className="text-[11px] text-slate-400 block mb-3">
+                      حدد نغمة صوت مميزة لكل نوع تنبيه لتمكين التمييز السمعي الفوري دون الحاجة للنظر للشاشة.
+                    </span>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      {[
+                        { type: 'price_drop', label: '📉 انخفاض سعر التكلفة (Price Drop)', defaultSound: 'bell' },
+                        { type: 'price_hike', label: '📈 ارتفاع سعر التكلفة (Price Hike)', defaultSound: 'synth' },
+                        { type: 'availability_oos', label: '❌ نفاد الكمية / غير متوفر (Out of Stock)', defaultSound: 'alarm' },
+                        { type: 'availability_back', label: '✅ عودة التوفر (Available Again)', defaultSound: 'chime' },
+                        { type: 'new_product', label: '✨ منتج جديد بالكتالوج (New Product)', defaultSound: 'bubble' },
+                        { type: 'threshold_breach', label: '⚡ كسر حد التكلفة (Threshold Breach)', defaultSound: 'chime' },
+                      ].map((item) => {
+                        const currentSound = (ruleConfig.alertSounds && ruleConfig.alertSounds[item.type as AlertType]) || item.defaultSound;
+                        return (
+                          <div key={item.type} className="bg-slate-900 border border-slate-800 rounded-xl p-2.5 flex items-center justify-between gap-2">
+                            <span className="text-[11px] font-medium text-slate-200 truncate">{item.label}</span>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <select
+                                value={currentSound}
+                                onChange={(e) => {
+                                  const sound = e.target.value;
+                                  onUpdateRuleConfig({
+                                    ...ruleConfig,
+                                    alertSounds: {
+                                      ...(ruleConfig.alertSounds || {}),
+                                      [item.type as AlertType]: sound,
+                                    },
+                                  });
+                                  playAlertNotificationSound(sound);
+                                }}
+                                className="bg-slate-950 border border-slate-700 text-indigo-300 font-semibold px-2 py-1 rounded-lg text-xs focus:outline-none focus:border-indigo-500 cursor-pointer"
+                              >
+                                <option value="chime">نغمة مزدوجة (Chime)</option>
+                                <option value="bell">جرس حاد (Bell)</option>
+                                <option value="alarm">إنذار تنبيه (Alarm)</option>
+                                <option value="synth">سنث صاعد (Synth)</option>
+                                <option value="bubble">نغمة صاعدة (Bubble)</option>
+                              </select>
+                              <button
+                                type="button"
+                                onClick={() => playAlertNotificationSound(currentSound)}
+                                className="p-1 rounded-lg bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white transition-colors cursor-pointer"
+                                title="تجربة الصوت"
+                              >
+                                <Play className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
 
                   {/* Native Browser Desktop Notifications (Notification API) */}
                   <div className="pt-2.5 mt-1 border-t border-slate-800">
